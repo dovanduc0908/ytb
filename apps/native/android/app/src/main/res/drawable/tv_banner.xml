@@ -1,0 +1,4 @@
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item><shape android:shape="rectangle"><solid android:color="#0f0f0f"/><size android:width="320dp" android:height="180dp"/></shape></item>
+    <item android:gravity="center" android:width="140dp" android:height="140dp" android:drawable="@drawable/duchaik_logo"/>
+</layer-list>

@@ -1,0 +1,59 @@
+{
+  "charts": [
+    {
+      "region": "GLOBAL",
+      "count": 100,
+      "date": "2026-10-24",
+      "ms": 1748
+    },
+    {
+      "region": "VN",
+      "count": 100,
+      "date": "2026-10-24",
+      "ms": 1868
+    }
+  ],
+  "feed": [
+    {
+      "page": 1,
+      "ms": 1570,
+      "count": 24
+    },
+    {
+      "page": 2,
+      "ms": 19,
+      "count": 24
+    },
+    {
+      "page": 3,
+      "ms": 15,
+      "count": 24
+    }
+  ],
+  "seeks": [
+    {
+      "position": 10000,
+      "ms": 157,
+      "audio": "audio/mp4a-latm"
+    },
+    {
+      "position": 180000,
+      "ms": 562,
+      "audio": "audio/mp4a-latm"
+    },
+    {
+      "position": 10000,
+      "ms": 350,
+      "audio": "audio/mp4a-latm"
+    },
+    {
+      "position": 180000,
+      "ms": 562,
+      "audio": "audio/mp4a-latm"
+    }
+  ],
+  "searchPagination": true,
+  "startupWithExistingMediaCacheMs": 731,
+  "direct4K": true,
+  "preparedStartupMs": 216
+}

@@ -1,0 +1,15 @@
+{"text": "", "content-desc": "YTB\nPLAY", "class": "android.view.View", "clickable": "false", "bounds": "[42,139][891,223]"}
+{"text": "", "content-desc": "Tài khoản và cài đặt", "class": "android.widget.Button", "clickable": "true", "bounds": "[933,118][1059,244]"}
+{"text": "", "content-desc": "Tìm kiếm", "class": "android.widget.Button", "clickable": "true", "bounds": "[922,275][1049,401]"}
+{"text": "", "content-desc": "Khám phá", "class": "android.widget.Button", "clickable": "true", "bounds": "[32,448][281,574]"}
+{"text": "", "content-desc": "Âm nhạc", "class": "android.widget.Button", "clickable": "true", "bounds": "[302,448][531,574]"}
+{"text": "", "content-desc": "Công nghệ", "class": "android.widget.Button", "clickable": "true", "bounds": "[552,448][812,574]"}
+{"text": "", "content-desc": "Thiên nhiên", "class": "android.widget.Button", "clickable": "true", "bounds": "[833,448][1049,574]"}
+{"text": "", "content-desc": "Dành cho bạn", "class": "android.view.View", "clickable": "false", "bounds": "[32,632][540,695]"}
+{"text": "", "content-desc": "7:45\nSpring - Blender Open Movie\nBlender Studio", "class": "android.widget.ImageView", "clickable": "true", "bounds": "[0,727][1080,1549]"}
+{"text": "", "content-desc": "Lưu xem sau", "class": "android.widget.Button", "clickable": "true", "bounds": "[943,1366][1070,1492]"}
+{"text": "", "content-desc": "4:23\nCHARGE   Blender Open Movie\nZeiaon", "class": "android.widget.ImageView", "clickable": "true", "bounds": "[0,1581][1080,1986]"}
+{"text": "", "content-desc": "Trang chủ\nTab 1 of 4", "class": "android.widget.Button", "clickable": "true", "bounds": "[0,1986][270,2047]"}
+{"text": "", "content-desc": "Lịch sử\nTab 2 of 4", "class": "android.widget.Button", "clickable": "true", "bounds": "[270,1986][540,2047]"}
+{"text": "", "content-desc": "Xem sau\nTab 3 of 4", "class": "android.widget.Button", "clickable": "true", "bounds": "[540,1986][810,2047]"}
+{"text": "", "content-desc": "Cài đặt\nTab 4 of 4", "class": "android.widget.Button", "clickable": "true", "bounds": "[810,1986][1080,2047]"}

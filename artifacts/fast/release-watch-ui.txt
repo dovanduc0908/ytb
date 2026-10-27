@@ -1,0 +1,28 @@
+{"text": "", "content-desc": "Về khám phá", "class": "android.widget.Button", "clickable": "true", "bounds": "[11,118][137,244]"}
+{"text": "", "content-desc": "YTB\nPLAY", "class": "android.view.View", "clickable": "false", "bounds": "[189,139][891,223]"}
+{"text": "", "content-desc": "Tài khoản và cài đặt", "class": "android.widget.Button", "clickable": "true", "bounds": "[933,118][1059,244]"}
+{"text": "", "content-desc": "Hiện điều khiển video", "class": "android.widget.Button", "clickable": "true", "bounds": "[0,254][1080,862]"}
+{"text": "", "content-desc": "Tùy chọn phát", "class": "android.widget.Button", "clickable": "true", "bounds": "[933,254][1059,380]"}
+{"text": "", "content-desc": "Phát video", "class": "android.widget.Button", "clickable": "true", "bounds": "[456,474][624,642]"}
+{"text": "", "content-desc": "Lùi 10 giây", "class": "android.widget.Button", "clickable": "true", "bounds": "[267,495][393,621]"}
+{"text": "", "content-desc": "Tới 10 giây", "class": "android.widget.Button", "clickable": "true", "bounds": "[687,495][813,621]"}
+{"text": "", "content-desc": "0:22 / 7:44", "class": "android.view.View", "clickable": "false", "bounds": "[42,729][199,774]"}
+{"text": "", "content-desc": "5%", "class": "android.widget.SeekBar", "clickable": "true", "bounds": "[28,775][154,901]"}
+{"text": "", "content-desc": "Toàn màn hình", "class": "android.widget.Button", "clickable": "true", "bounds": "[943,688][1070,814]"}
+{"text": "", "content-desc": "1.0×", "class": "android.widget.Button", "clickable": "true", "bounds": "[42,862][239,988]"}
+{"text": "", "content-desc": "Auto · 536p", "class": "android.widget.Button", "clickable": "true", "bounds": "[260,862][573,988]"}
+{"text": "", "content-desc": "Hẹn ngủ", "class": "android.widget.Button", "clickable": "true", "bounds": "[594,862][856,988]"}
+{"text": "", "content-desc": "Cửa sổ nổi", "class": "android.widget.Button", "clickable": "true", "bounds": "[877,862][1080,988]"}
+{"text": "", "content-desc": "Spring - Blender Open Movie", "class": "android.view.View", "clickable": "false", "bounds": "[53,1051][680,1111]"}
+{"text": "", "content-desc": "Blender Studio", "class": "android.view.View", "clickable": "false", "bounds": "[53,1142][300,1195]"}
+{"text": "", "content-desc": "Xem sau", "class": "android.widget.Button", "clickable": "true", "bounds": "[42,1216][328,1342]"}
+{"text": "", "content-desc": "Liên kết", "class": "android.widget.Button", "clickable": "true", "bounds": "[328,1216][601,1342]"}
+{"text": "", "content-desc": "Tiếp tục khám phá", "class": "android.view.View", "clickable": "false", "bounds": "[53,1394][456,1463]"}
+{"text": "", "content-desc": "4:23\nCHARGE - Blender Open Movie\nBlender Studio", "class": "android.widget.ImageView", "clickable": "true", "bounds": "[42,1515][1038,1715]"}
+{"text": "", "content-desc": "Lưu xem sau", "class": "android.widget.Button", "clickable": "true", "bounds": "[912,1552][1038,1678]"}
+{"text": "", "content-desc": "10:30\nSprite Fright - Blender Open Movie\nBlender Studio", "class": "android.widget.ImageView", "clickable": "true", "bounds": "[42,1757][1038,1956]"}
+{"text": "", "content-desc": "Lưu xem sau", "class": "android.widget.Button", "clickable": "true", "bounds": "[912,1793][1038,1919]"}
+{"text": "", "content-desc": "Trang chủ\nTab 1 of 4", "class": "android.widget.Button", "clickable": "true", "bounds": "[0,1986][270,2047]"}
+{"text": "", "content-desc": "Lịch sử\nTab 2 of 4", "class": "android.widget.Button", "clickable": "true", "bounds": "[270,1986][540,2047]"}
+{"text": "", "content-desc": "Xem sau\nTab 3 of 4", "class": "android.widget.Button", "clickable": "true", "bounds": "[540,1986][810,2047]"}
+{"text": "", "content-desc": "Cài đặt\nTab 4 of 4", "class": "android.widget.Button", "clickable": "true", "bounds": "[810,1986][1080,2047]"}

@@ -1,0 +1,24 @@
+Resolving dependencies...
+Downloading packages...
+  cupertino_icons 1.0.9 (2.0.0 available)
+  material_color_utilities 0.13.0 (0.13.1 available)
+  meta 1.18.3 (1.19.0 available)
+  shared_preferences_foundation 2.5.7 (2.6.0 available)
+  test_api 0.7.12 (0.7.15 available)
+  vector_math 2.4.0 (2.4.3 available)
+Got dependencies!
+6 packages have newer versions incompatible with dependency constraints.
+Try `flutter pub outdated` for more information.
+00:00 +0: loading /Users/duchaik/Documents/YTB/apps/native/integration_test/audio_channel_queue_test.dart
+Running Gradle task 'assembleDebug'...                              9,9s
+✓ Built build/app/outputs/flutter-apk/app-debug.apk
+Installing build/app/outputs/flutter-apk/app-debug.apk...           5,1s
+00:00 +0: real audio, channel pages and learned background music queue
+MUSIC_BEFORE:0
+AUDIO_CHANNEL:{"title":"NƠI NÀY CÓ ANH | OFFICIAL MUSIC VIDEO | SƠN TÙNG M-TP","views":"464793957","channel":"Sơn Tùng M-TP Official","videos":30,"track":{"mime":"audio/webm","bitrate":167406,"gain":0.5023426413536072}}
+MUSIC_LEARN:{"number":1,"id":"FN7ALfpGxiI","audio":"audio/opus","bitrate":167406,"channels":2,"sampleRate":48000,"underruns":0,"learned":1}
+MUSIC_LEARN:{"number":2,"id":"hO4X_mJSqPI","audio":"audio/opus","bitrate":157533,"channels":2,"sampleRate":48000,"underruns":0,"learned":2}
+MUSIC_LEARN:{"number":3,"id":"xypzmu5mMPY","audio":"audio/opus","bitrate":164195,"channels":2,"sampleRate":48000,"underruns":0,"learned":3}
+MUSIC_LEARN:{"number":4,"id":"psZ1g9fMfeo","audio":"audio/opus","bitrate":167822,"channels":2,"sampleRate":48000,"underruns":0,"learned":4}
+MUSIC_LEARN:{"number":5,"id":"abPmZCZZrFA","audio":"audio/opus","bitrate":146021,"channels":2,"sampleRate":48000,"underruns":0,"learned":5}
+MUSIC_LEARN:{"number":6,"id":"Vt4kAu-ziRY","audio":"audio/opus","bitrate":146710,"channels":2,"sampleRate":48000,"underruns":0,"learned":6}

@@ -1,0 +1,27 @@
+Resolving dependencies...
+Downloading packages...
+  cupertino_icons 1.0.9 (2.0.0 available)
+  material_color_utilities 0.13.0 (0.13.1 available)
+  meta 1.18.3 (1.19.0 available)
+  shared_preferences_foundation 2.5.7 (2.6.0 available)
+  test_api 0.7.12 (0.7.15 available)
+  vector_math 2.4.0 (2.4.3 available)
+Got dependencies!
+6 packages have newer versions incompatible with dependency constraints.
+Try `flutter pub outdated` for more information.
+00:00 +0: loading /Users/duchaik/Documents/YTB/apps/native/integration_test/captions_quality_chapters_test.dart
+Running Gradle task 'assembleDebug'...                              7,8s
+✓ Built build/app/outputs/flutter-apk/app-debug.apk
+Installing build/app/outputs/flutter-apk/app-debug.apk...           6,0s
+00:00 +0: public metadata, caption playback and adaptive quality
+SEARCH_FILTER_QA count=20 timed=15
+EXTRAS_QA id=aqz-KE-bpKQ playing=true status=ready tracks=[] chapters=0 quality=0
+EXTRAS_QA id=jNQXAC9IVRw playing=true status=ready tracks=[{id: 0, language: en, label: Tiếng Anh, automatic: false}, {id: 1, language: de, label: Tiếng Đức, automatic: false}] chapters=0 quality=0
+CAPTION_QA id=jNQXAC9IVRw status=ready selected=0 visible=true
+EXTRAS_QA id=dQw4w9WgXcQ playing=true status=ready tracks=[{id: 0, language: en, label: Tiếng Anh, automatic: false}, {id: 1, language: en, label: Tiếng Anh (được tạo tự động), automatic: true}, {id: 2, language: pt-BR, label: Tiếng Bồ Đào Nha (Brazil), automatic: false}, {id: 3, language: de-DE, label: Tiếng Đức (Đức), automatic: false}, {id: 4, language: ja, label: Tiếng Nhật, automatic: false}, {id: 5, language: es-419, label: Tiếng Tây Ban Nha (Châu Mỹ La-tinh), automatic: false}] chapters=0 quality=0
+CAPTION_QA id=dQw4w9WgXcQ status=ready selected=0 visible=false
+EXTRAS_QA id=K5KVEU3aaeQ playing=true status=ready tracks=[{id: 0, language: en, label: Tiếng Anh (được tạo tự động), automatic: true}] chapters=0 quality=0
+CAPTION_QA id=K5KVEU3aaeQ status=ready selected=0 visible=true
+CHAPTER_QA count=44 seek=56000
+00:17 +1: (tearDownAll)
+00:17 +1: All tests passed!

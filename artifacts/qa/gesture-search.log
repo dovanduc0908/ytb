@@ -1,0 +1,20 @@
+Waiting for another flutter command to release the startup lock...
+Resolving dependencies...
+Downloading packages...
+  cupertino_icons 1.0.9 (2.0.0 available)
+  material_color_utilities 0.13.0 (0.13.1 available)
+  meta 1.18.3 (1.19.0 available)
+  shared_preferences_foundation 2.5.7 (2.6.0 available)
+  test_api 0.7.12 (0.7.15 available)
+  vector_math 2.4.0 (2.4.3 available)
+Got dependencies!
+6 packages have newer versions incompatible with dependency constraints.
+Try `flutter pub outdated` for more information.
+00:00 +0: loading /Users/duchaik/Documents/YTB/apps/native/integration_test/gesture_search_test.dart
+Running Gradle task 'assembleDebug'...                              6,4s
+✓ Built build/app/outputs/flutter-apk/app-debug.apk
+Installing build/app/outputs/flutter-apk/app-debug.apk...           5,3s
+00:00 +0: live search pagination, fresh uploads, and native gesture controls
+GESTURE_SEARCH_QA:{"first":20,"second":20,"recent":["6 ngày trước","19 giờ trước","13 giờ trước","1 ngày trước","13 giờ trước","1 ngày trước","2 ngày trước","6 ngày trước","4 ngày trước","2 ngày trước","2 ngày trước","3 ngày trước","3 ngày trước","5 ngày trước","5 ngày trước","1 ngày trước","5 ngày trước","13 giờ trước","1 ngày trước","1 ngày trước"],"suggestions":10,"nativeControls":true}
+00:04 +1: (tearDownAll)
+00:04 +1: All tests passed!

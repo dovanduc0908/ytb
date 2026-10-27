@@ -1,0 +1,61 @@
+Applications Memory Usage (in Kilobytes):
+Uptime: 476286271 Realtime: 1061160541
+
+** MEMINFO in pid 25907 [com.duchaik.ytb] **
+                   Pss  Private  Private  SwapPss      Rss     Heap     Heap     Heap
+                 Total    Dirty    Clean    Dirty    Total     Size    Alloc     Free
+                ------   ------   ------   ------   ------   ------   ------   ------
+  Native Heap    33443    33424        0       32    34364    56772    39577    11865
+  Dalvik Heap    35441    35412        0       79    36644    52849    28273    24576
+ Dalvik Other     2691     1872        0        0     4296                           
+        Stack     2408     2408        0        0     2420                           
+       Ashmem     1783        0        0        0     4304                           
+      Gfx dev    19064    19064        0        0    19064                           
+    Other dev      334      284       28        0      784                           
+     .so mmap    27690      760    21548        0    68612                           
+    .jar mmap     2318        0      520        0    29220                           
+    .apk mmap     5010        0     4668        0     7548                           
+    .ttf mmap     1580        0      660        0     4100                           
+    .dex mmap     3125        4     3100        0     3756                           
+    .oat mmap      709        0      164        0    17928                           
+    .art mmap     1787     1416       40       83    14532                           
+   Other mmap     2860        8     2588        0     4496                           
+   EGL mtrack    93140    93140        0        0    93140                           
+    GL mtrack      960      960        0        0      960                           
+      Unknown    26178    26160        4        0    26592                           
+        TOTAL   260715   214912    33320      194   372760   109621    67850    36441
+ 
+ App Summary
+                       Pss(KB)                        Rss(KB)
+                        ------                         ------
+           Java Heap:    36868                          51176
+         Native Heap:    33424                          34364
+                Code:    31424                         132792
+               Stack:     2408                           2420
+            Graphics:   113164                         113164
+       Private Other:    30944
+              System:    12483
+             Unknown:                                   38844
+ 
+           TOTAL PSS:   260715            TOTAL RSS:   372760       TOTAL SWAP PSS:      194
+ 
+ Objects
+               Views:       93         ViewRootImpl:        1
+         AppContexts:        7           Activities:        1
+              Assets:       21        AssetManagers:        0
+       Local Binders:       27        Proxy Binders:       54
+       Parcel memory:       19         Parcel count:       70
+    Death Recipients:        3      OpenSSL Sockets:        3
+            WebViews:        0
+ 
+ SQL
+         MEMORY_USED:      104
+  PAGECACHE_OVERFLOW:       42          MALLOC_SIZE:       46
+ 
+ DATABASES
+      pgsz     dbsz   Lookaside(b)          cache  Dbname
+         4       32             76       456/69/9  /data/user/0/com.duchaik.ytb/databases/exoplayer_internal.db
+ 
+ Asset Allocations
+    : 17K
+    : 6K

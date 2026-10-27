@@ -1,0 +1,26 @@
+{"text": "", "content-desc": "YTB\nPREVIEW", "class": "android.view.View", "clickable": "false", "bounds": "[42,139][891,223]"}
+{"text": "", "content-desc": "Tài khoản và cài đặt", "class": "android.widget.Button", "clickable": "true", "bounds": "[933,118][1059,244]"}
+{"text": "nhac", "content-desc": "", "class": "android.widget.EditText", "clickable": "true", "bounds": "[53,286][1028,433]"}
+{"text": "", "content-desc": "Xóa từ khóa", "class": "android.widget.Button", "clickable": "true", "bounds": "[775,296][901,422]"}
+{"text": "", "content-desc": "Tìm kiếm", "class": "android.widget.Button", "clickable": "true", "bounds": "[901,296][1028,422]"}
+{"text": "", "content-desc": "Gợi ý tìm kiếm", "class": "android.view.View", "clickable": "false", "bounds": "[84,464][996,506]"}
+{"text": "", "content-desc": "nhac remix", "class": "android.widget.Button", "clickable": "true", "bounds": "[53,517][1028,643]"}
+{"text": "", "content-desc": "Điền nhac remix", "class": "android.widget.Button", "clickable": "true", "bounds": "[838,517][964,643]"}
+{"text": "", "content-desc": "nhac thieu nhi", "class": "android.widget.Button", "clickable": "true", "bounds": "[53,643][1028,769]"}
+{"text": "", "content-desc": "Điền nhac thieu nhi", "class": "android.widget.Button", "clickable": "true", "bounds": "[838,643][964,769]"}
+{"text": "", "content-desc": "nhạc", "class": "android.widget.Button", "clickable": "true", "bounds": "[53,769][1028,895]"}
+{"text": "", "content-desc": "Điền nhạc", "class": "android.widget.Button", "clickable": "true", "bounds": "[838,769][964,895]"}
+{"text": "", "content-desc": "nhac chill", "class": "android.widget.Button", "clickable": "true", "bounds": "[53,895][1028,1021]"}
+{"text": "", "content-desc": "Điền nhac chill", "class": "android.widget.Button", "clickable": "true", "bounds": "[838,895][964,1021]"}
+{"text": "", "content-desc": "nhạc trẻ", "class": "android.widget.Button", "clickable": "true", "bounds": "[53,1021][1028,1147]"}
+{"text": "", "content-desc": "Điền nhạc trẻ", "class": "android.widget.Button", "clickable": "true", "bounds": "[838,1021][964,1147]"}
+{"text": "", "content-desc": "nhac tiktok hay 2026", "class": "android.widget.Button", "clickable": "true", "bounds": "[53,1147][1028,1206]"}
+{"text": "", "content-desc": "Điền nhac tiktok hay 2026", "class": "android.widget.Button", "clickable": "true", "bounds": "[838,1147][964,1206]"}
+{"text": "", "content-desc": "Khám phá", "class": "android.widget.Button", "clickable": "true", "bounds": "[53,1243][357,1289]"}
+{"text": "", "content-desc": "Âm nhạc", "class": "android.widget.Button", "clickable": "true", "bounds": "[378,1243][608,1289]"}
+{"text": "", "content-desc": "Công nghệ", "class": "android.widget.Button", "clickable": "true", "bounds": "[629,1243][893,1289]"}
+{"text": "", "content-desc": "Thiên nhiên", "class": "android.widget.Button", "clickable": "true", "bounds": "[914,1243][1028,1289]"}
+{"text": "", "content-desc": "Khám phá\nTab 1 of 4", "class": "android.widget.Button", "clickable": "true", "bounds": "[0,1944][270,2047]"}
+{"text": "", "content-desc": "Lịch sử\nTab 2 of 4", "class": "android.widget.Button", "clickable": "true", "bounds": "[270,1944][540,2047]"}
+{"text": "", "content-desc": "Xem sau\nTab 3 of 4", "class": "android.widget.Button", "clickable": "true", "bounds": "[540,1944][810,2047]"}
+{"text": "", "content-desc": "Cài đặt\nTab 4 of 4", "class": "android.widget.Button", "clickable": "true", "bounds": "[810,1944][1080,2047]"}

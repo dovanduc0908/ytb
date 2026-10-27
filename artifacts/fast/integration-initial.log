@@ -1,0 +1,24 @@
+Resolving dependencies...
+Downloading packages...
+  cupertino_icons 1.0.9 (2.0.0 available)
+  material_color_utilities 0.13.0 (0.13.1 available)
+  meta 1.18.3 (1.19.0 available)
+  shared_preferences_foundation 2.5.7 (2.6.0 available)
+  test_api 0.7.12 (0.7.15 available)
+  vector_math 2.4.0 (2.4.3 available)
+Got dependencies!
+6 packages have newer versions incompatible with dependency constraints.
+Try `flutter pub outdated` for more information.
+00:00 +0: loading /Users/duchaik/Documents/YTB/apps/native/integration_test/fast_start_test.dart
+Running Gradle task 'assembleDebug'...                              6,7s
+✓ Built build/app/outputs/flutter-apk/app-debug.apk
+Installing build/app/outputs/flutter-apk/app-debug.apk...           4,9s
+00:00 +0: Direct startup: cold, prepared and replay; search latency
+YTB_FAST_QA:{"search":[{"kind":"fresh","ms":1301,"count":20},{"kind":"fresh","ms":704,"count":20},{"kind":"fresh","ms":826,"count":20},{"kind":"prepared","ms":9,"cacheHit":true}],"playback":[]}
+YTB_FAST_QA:{"search":[{"kind":"fresh","ms":1301,"count":20},{"kind":"fresh","ms":704,"count":20},{"kind":"fresh","ms":826,"count":20},{"kind":"prepared","ms":9,"cacheHit":true}],"playback":[{"id":"aqz-KE-bpKQ","kind":"cold","resolveMs":301,"tapToFrameMs":820,"loadToFrameMs":487,"height":720,"audio":"audio/mp4a-latm"}]}
+YTB_FAST_QA:{"search":[{"kind":"fresh","ms":1301,"count":20},{"kind":"fresh","ms":704,"count":20},{"kind":"fresh","ms":826,"count":20},{"kind":"prepared","ms":9,"cacheHit":true}],"playback":[{"id":"aqz-KE-bpKQ","kind":"cold","resolveMs":301,"tapToFrameMs":820,"loadToFrameMs":487,"height":720,"audio":"audio/mp4a-latm"},{"id":"jNQXAC9IVRw","kind":"cold","resolveMs":282,"tapToFrameMs":489,"loadToFrameMs":197,"height":240,"audio":"audio/mp4a-latm"}]}
+YTB_FAST_QA:{"search":[{"kind":"fresh","ms":1301,"count":20},{"kind":"fresh","ms":704,"count":20},{"kind":"fresh","ms":826,"count":20},{"kind":"prepared","ms":9,"cacheHit":true}],"playback":[{"id":"aqz-KE-bpKQ","kind":"cold","resolveMs":301,"tapToFrameMs":820,"loadToFrameMs":487,"height":720,"audio":"audio/mp4a-latm"},{"id":"jNQXAC9IVRw","kind":"cold","resolveMs":282,"tapToFrameMs":489,"loadToFrameMs":197,"height":240,"audio":"audio/mp4a-latm"},{"id":"WhWc3b3KhnY","kind":"prepared","resolveMs":9,"tapToFrameMs":132,"loadToFrameMs":115,"height":536,"audio":"audio/mp4a-latm"}]}
+YTB_FAST_QA:{"search":[{"kind":"fresh","ms":1301,"count":20},{"kind":"fresh","ms":704,"count":20},{"kind":"fresh","ms":826,"count":20},{"kind":"prepared","ms":9,"cacheHit":true}],"playback":[{"id":"aqz-KE-bpKQ","kind":"cold","resolveMs":301,"tapToFrameMs":820,"loadToFrameMs":487,"height":720,"audio":"audio/mp4a-latm"},{"id":"jNQXAC9IVRw","kind":"cold","resolveMs":282,"tapToFrameMs":489,"loadToFrameMs":197,"height":240,"audio":"audio/mp4a-latm"},{"id":"WhWc3b3KhnY","kind":"prepared","resolveMs":9,"tapToFrameMs":132,"loadToFrameMs":115,"height":536,"audio":"audio/mp4a-latm"},{"id":"WhWc3b3KhnY","kind":"replay","resolveMs":17,"tapToFrameMs":134,"loadToFrameMs":107,"height":536,"audio":"audio/mp4a-latm"}]}
+YTB_FAST_QA:{"search":[{"kind":"fresh","ms":1301,"count":20},{"kind":"fresh","ms":704,"count":20},{"kind":"fresh","ms":826,"count":20},{"kind":"prepared","ms":9,"cacheHit":true}],"playback":[{"id":"aqz-KE-bpKQ","kind":"cold","resolveMs":301,"tapToFrameMs":820,"loadToFrameMs":487,"height":720,"audio":"audio/mp4a-latm"},{"id":"jNQXAC9IVRw","kind":"cold","resolveMs":282,"tapToFrameMs":489,"loadToFrameMs":197,"height":240,"audio":"audio/mp4a-latm"},{"id":"WhWc3b3KhnY","kind":"prepared","resolveMs":9,"tapToFrameMs":132,"loadToFrameMs":115,"height":536,"audio":"audio/mp4a-latm"},{"id":"WhWc3b3KhnY","kind":"replay","resolveMs":17,"tapToFrameMs":134,"loadToFrameMs":107,"height":536,"audio":"audio/mp4a-latm"}]}
+00:20 +1: (tearDownAll)
+00:21 +1: All tests passed!

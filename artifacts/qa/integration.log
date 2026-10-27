@@ -1,0 +1,24 @@
+Resolving dependencies...
+Downloading packages...
+  cupertino_icons 1.0.9 (2.0.0 available)
++ flutter_driver 0.0.0 from sdk flutter
++ fuchsia_remote_debug_protocol 0.0.0 from sdk flutter
++ integration_test 0.0.0 from sdk flutter
+  material_color_utilities 0.13.0 (0.13.1 available)
+  meta 1.18.3 (1.19.0 available)
++ process 5.0.6
+  shared_preferences_foundation 2.5.7 (2.6.0 available)
++ sync_http 0.3.1
+  test_api 0.7.12 (0.7.15 available)
+  vector_math 2.4.0 (2.4.3 available)
++ webdriver 3.2.0
+Changed 6 dependencies!
+6 packages have newer versions incompatible with dependency constraints.
+Try `flutter pub outdated` for more information.
+00:00 +0: loading /Users/duchaik/Documents/YTB/apps/native/integration_test/player_test.dart
+Running Gradle task 'assembleDebug'...                             31,3s
+✓ Built build/app/outputs/flutter-apk/app-debug.apk
+Installing build/app/outputs/flutter-apk/app-debug.apk...           5,2s
+00:00 +0: Real Samsung playback: 17 speeds, supported qualities, sleep timer
+02:29 +1: (tearDownAll)
+02:30 +1: All tests passed!

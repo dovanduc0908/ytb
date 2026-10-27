@@ -1,0 +1,6 @@
+--------- beginning of main
+10-26 15:50:04.354 15219 15424 I YTBSource: search OK 1012ms on-device cache=false
+10-26 15:50:37.434 15219 15674 I YTBSource: resolve OK 0ms on-device cache=true
+10-26 15:50:37.674 15219 15219 I YTBStartup: first-frame 237ms
+10-26 15:51:06.677 15219 15219 I YTBStartup: first-frame 237ms
+10-26 15:52:30.298 15219 15219 I YTBStartup: first-frame 237ms

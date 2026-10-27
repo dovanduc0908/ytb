@@ -1,0 +1,21 @@
+{"text": "", "content-desc": "Về khám phá", "class": "android.widget.Button", "clickable": "true", "bounds": "[11,118][137,244]"}
+{"text": "", "content-desc": "YTB\nPREVIEW", "class": "android.view.View", "clickable": "false", "bounds": "[189,139][891,223]"}
+{"text": "", "content-desc": "Tài khoản và cài đặt", "class": "android.widget.Button", "clickable": "true", "bounds": "[933,118][1059,244]"}
+{"text": "", "content-desc": "2%", "class": "android.widget.SeekBar", "clickable": "true", "bounds": "[21,862][147,988]"}
+{"text": "", "content-desc": "2:35 / 1:59:46", "class": "android.view.View", "clickable": "false", "bounds": "[42,1028][244,1073]"}
+{"text": "", "content-desc": "Toàn màn hình", "class": "android.widget.Button", "clickable": "true", "bounds": "[912,988][1038,1114]"}
+{"text": "", "content-desc": "Lùi 10 giây", "class": "android.widget.Button", "clickable": "true", "bounds": "[267,1135][393,1261]"}
+{"text": "", "content-desc": "Tạm dừng", "class": "android.widget.Button", "clickable": "true", "bounds": "[456,1114][624,1282]"}
+{"text": "", "content-desc": "Tới 10 giây", "class": "android.widget.Button", "clickable": "true", "bounds": "[687,1135][813,1261]"}
+{"text": "", "content-desc": "1.0×", "class": "android.widget.Button", "clickable": "true", "bounds": "[42,1318][251,1444]"}
+{"text": "", "content-desc": "Auto · 1080p", "class": "android.widget.Button", "clickable": "true", "bounds": "[272,1318][622,1444]"}
+{"text": "", "content-desc": "Hẹn ngủ", "class": "android.widget.Button", "clickable": "true", "bounds": "[643,1318][918,1444]"}
+{"text": "", "content-desc": "Cửa sổ nổi", "class": "android.widget.Button", "clickable": "true", "bounds": "[939,1318][1080,1444]"}
+{"text": "", "content-desc": "Bùng nổ với playlist bản rap triệu view replay không ngừng từ các quái vật cực chiến 2 mùa Rap Việt", "class": "android.view.View", "clickable": "false", "bounds": "[53,1507][1028,1736]"}
+{"text": "", "content-desc": "Vie Channel - MUSIC", "class": "android.view.View", "clickable": "false", "bounds": "[53,1767][399,1820]"}
+{"text": "", "content-desc": "Xem sau", "class": "android.widget.Button", "clickable": "true", "bounds": "[42,1841][328,1944]"}
+{"text": "", "content-desc": "Liên kết", "class": "android.widget.Button", "clickable": "true", "bounds": "[328,1841][601,1944]"}
+{"text": "", "content-desc": "Khám phá\nTab 1 of 4", "class": "android.widget.Button", "clickable": "true", "bounds": "[0,1944][270,2047]"}
+{"text": "", "content-desc": "Lịch sử\nTab 2 of 4", "class": "android.widget.Button", "clickable": "true", "bounds": "[270,1944][540,2047]"}
+{"text": "", "content-desc": "Xem sau\nTab 3 of 4", "class": "android.widget.Button", "clickable": "true", "bounds": "[540,1944][810,2047]"}
+{"text": "", "content-desc": "Cài đặt\nTab 4 of 4", "class": "android.widget.Button", "clickable": "true", "bounds": "[810,1944][1080,2047]"}

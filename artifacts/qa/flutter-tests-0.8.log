@@ -1,0 +1,37 @@
+Resolving dependencies...
+Downloading packages...
+  cupertino_icons 1.0.9 (2.0.0 available)
+  material_color_utilities 0.13.0 (0.13.1 available)
+  meta 1.18.3 (1.19.0 available)
+  shared_preferences_foundation 2.5.7 (2.6.0 available)
+  test_api 0.7.12 (0.7.15 available)
+  vector_math 2.4.0 (2.4.3 available)
+Got dependencies!
+6 packages have newer versions incompatible with dependency constraints.
+Try `flutter pub outdated` for more information.
+00:00 +0: loading /Users/duchaik/Documents/YTB/apps/native/test/search_box_test.dart
+00:00 +0: /Users/duchaik/Documents/YTB/apps/native/test/widget_test.dart: YouTube link parsing accepts known hosts, rejects lookalikes
+00:00 +1: /Users/duchaik/Documents/YTB/apps/native/test/recommendations_test.dart: Actual viewing trains interests; seeking, buffering and opt-out do not
+00:00 +2: /Users/duchaik/Documents/YTB/apps/native/test/recommendations_test.dart: Actual viewing trains interests; seeking, buffering and opt-out do not
+00:00 +3: /Users/duchaik/Documents/YTB/apps/native/test/recommendations_test.dart: Actual viewing trains interests; seeking, buffering and opt-out do not
+00:00 +4: /Users/duchaik/Documents/YTB/apps/native/test/recommendations_test.dart: Preference ranking, hide, persistence and decay remain local and bounded
+00:00 +5: /Users/duchaik/Documents/YTB/apps/native/test/recommendations_test.dart: Daily feed pages deduplicate, mix regions, diversify and follow continuations
+00:00 +6: /Users/duchaik/Documents/YTB/apps/native/test/recommendations_test.dart: Network failure offers retry without pretending the source ended
+00:00 +7: /Users/duchaik/Documents/YTB/apps/native/test/player_overlay_test.dart: fullscreen zones adjust, seek once, zoom, and lock blocks touches
+00:00 +8: /Users/duchaik/Documents/YTB/apps/native/test/player_overlay_test.dart: fullscreen zones adjust, seek once, zoom, and lock blocks touches
+00:00 +9: /Users/duchaik/Documents/YTB/apps/native/test/player_overlay_test.dart: fullscreen zones adjust, seek once, zoom, and lock blocks touches
+00:00 +10: /Users/duchaik/Documents/YTB/apps/native/test/player_overlay_test.dart: fullscreen zones adjust, seek once, zoom, and lock blocks touches
+00:00 +11: /Users/duchaik/Documents/YTB/apps/native/test/player_overlay_test.dart: fullscreen zones adjust, seek once, zoom, and lock blocks touches
+00:00 +12: /Users/duchaik/Documents/YTB/apps/native/test/search_box_test.dart: voice final result submits once; cancelling preserves typed query
+00:00 +13: /Users/duchaik/Documents/YTB/apps/native/test/search_box_test.dart: voice final result submits once; cancelling preserves typed query
+00:00 +14: /Users/duchaik/Documents/YTB/apps/native/test/player_overlay_test.dart: timeline drag displays target time and signed seek distance
+00:00 +15: /Users/duchaik/Documents/YTB/apps/native/test/search_box_test.dart: missing speech service shows recovery and keeps search usable
+00:00 +16: /Users/duchaik/Documents/YTB/apps/native/test/search_box_test.dart: missing speech service shows recovery and keeps search usable
+00:00 +17: /Users/duchaik/Documents/YTB/apps/native/test/search_box_test.dart: missing speech service shows recovery and keeps search usable
+00:00 +18: /Users/duchaik/Documents/YTB/apps/native/test/search_box_test.dart: missing speech service shows recovery and keeps search usable
+00:00 +19: /Users/duchaik/Documents/YTB/apps/native/test/player_overlay_test.dart: fullscreen picture fills landscape; controls seek, pause and exit
+00:00 +20: /Users/duchaik/Documents/YTB/apps/native/test/search_box_test.dart: rapid typing makes one request; obsolete reply cannot replace current suggestions
+00:00 +21: /Users/duchaik/Documents/YTB/apps/native/test/search_box_test.dart: clear invalidates in-flight response and keeps input usable offline
+00:00 +22: /Users/duchaik/Documents/YTB/apps/native/test/search_box_test.dart: submit before debounce cancels suggestions and remembers query
+00:01 +23: /Users/duchaik/Documents/YTB/apps/native/test/search_box_test.dart: Vietnamese suggestions do not disturb ongoing IME composition
+00:01 +24: All tests passed!

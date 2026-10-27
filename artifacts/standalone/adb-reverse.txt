@@ -1,0 +1,10 @@
+UsbFfs tcp:55504 tcp:55504
+UsbFfs tcp:55505 tcp:55505
+UsbFfs tcp:55506 tcp:55506
+UsbFfs tcp:55507 tcp:55507
+UsbFfs tcp:55508 tcp:55508
+UsbFfs tcp:55509 tcp:55509
+UsbFfs tcp:55510 tcp:55510
+UsbFfs tcp:55511 tcp:55511
+UsbFfs tcp:34999 tcp:34999
+

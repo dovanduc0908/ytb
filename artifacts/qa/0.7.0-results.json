@@ -1,0 +1,54 @@
+{
+  "version": "0.7.0",
+  "device": "Samsung Galaxy S10+ (R58N405MC2R)",
+  "unitTests": 22,
+  "sources": [
+    "https://support.google.com/youtube/answer/16090438",
+    "https://support.google.com/youtube/answer/16089387"
+  ],
+  "search": {
+    "first": 20,
+    "second": 20,
+    "recent": [
+      "6 ngày trước",
+      "19 giờ trước",
+      "13 giờ trước",
+      "1 ngày trước",
+      "13 giờ trước",
+      "1 ngày trước",
+      "2 ngày trước",
+      "6 ngày trước",
+      "4 ngày trước",
+      "2 ngày trước",
+      "2 ngày trước",
+      "3 ngày trước",
+      "3 ngày trước",
+      "5 ngày trước",
+      "5 ngày trước",
+      "1 ngày trước",
+      "5 ngày trước",
+      "13 giờ trước",
+      "1 ngày trước",
+      "1 ngày trước"
+    ],
+    "suggestions": 10,
+    "nativeControls": true
+  },
+  "fullscreen": {
+    "fullscreenWidth": 827.8095238095239,
+    "fullscreenHeight": 411.42857142857144,
+    "viewportWidth": 827.8095238095239,
+    "viewportHeight": 411.42857142857144,
+    "nativeLayout": {
+      "width": 2173,
+      "height": 1080,
+      "surfaceWidth": 2173,
+      "surfaceHeight": 909
+    },
+    "playAfterRotation": true,
+    "backToPortrait": true,
+    "lockBlocksBack": true,
+    "swipeMiniplayer": true,
+    "speedReset": true
+  }
+}
