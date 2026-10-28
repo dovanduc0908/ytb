@@ -117,17 +117,17 @@ void main() {
       );
       await tester.dragFrom(const Offset(750, 240), const Offset(0, -100));
       await tester.pump();
-      expect(adjustments, contains('brightness'));
+      expect(adjustments, contains('volume'));
       expect(
-        tester.getRect(find.byKey(const Key('adjustment-brightness'))).left,
-        greaterThan(600),
+        tester.getRect(find.byKey(const Key('adjustment-volume'))).left,
+        inInclusiveRange(500, 600),
       );
       await tester.dragFrom(const Offset(150, 240), const Offset(0, -100));
       await tester.pump();
-      expect(adjustments, contains('volume'));
+      expect(adjustments, contains('brightness'));
       expect(
-        tester.getRect(find.byKey(const Key('adjustment-volume'))).right,
-        lessThan(300),
+        tester.getRect(find.byKey(const Key('adjustment-brightness'))).right,
+        inInclusiveRange(300, 400),
       );
       await tester.dragFrom(const Offset(450, 390), const Offset(0, -430));
       await tester.pump();
@@ -239,10 +239,7 @@ void main() {
     final preview = tester.getRect(find.byKey(const Key('seek-time-preview')));
     final slider = tester.getRect(find.byType(Slider));
     expect(preview.bottom, lessThan(slider.top));
-    expect(
-      preview.top,
-      greaterThan(tester.getRect(find.byType(PlayerOverlay)).center.dy),
-    );
+    expect(slider.top - preview.bottom, lessThan(12));
     expect(seeks, isEmpty);
     await drag.up();
     await tester.pump();
@@ -395,44 +392,43 @@ void main() {
     expect(seeks, hasLength(1));
     expect(seeks.single, greaterThan(30000));
   });
-  testWidgets(
-    'fullscreen picture fills landscape; controls pause and exit',
-    (tester) async {
-      tester.view.physicalSize = const Size(900, 400);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-      var fullTaps = 0, plays = 0;
-      const picture = Key('picture');
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: PlayerOverlay(
-              video: const ColoredBox(key: picture, color: Colors.black),
-              visible: true,
-              fullscreen: true,
-              state: const {
-                'playing': true,
-                'position': 20000,
-                'duration': 60000,
-              },
-              loading: false,
-              onToggle: () {},
-              onPlay: () => plays++,
-              onSeek: (_) {},
-              onFullscreen: () => fullTaps++,
-              onSettings: () {},
-              formatTime: clock,
-            ),
+  testWidgets('fullscreen picture fills landscape; controls pause and exit', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(900, 400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    var fullTaps = 0, plays = 0;
+    const picture = Key('picture');
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: PlayerOverlay(
+            video: const ColoredBox(key: picture, color: Colors.black),
+            visible: true,
+            fullscreen: true,
+            state: const {
+              'playing': true,
+              'position': 20000,
+              'duration': 60000,
+            },
+            loading: false,
+            onToggle: () {},
+            onPlay: () => plays++,
+            onSeek: (_) {},
+            onFullscreen: () => fullTaps++,
+            onSettings: () {},
+            formatTime: clock,
           ),
         ),
-      );
-      expect(tester.getSize(find.byKey(picture)), const Size(900, 400));
-      await tester.tap(find.byTooltip('Tạm dừng'));
-      await tester.tap(find.byTooltip('Thoát toàn màn hình'));
-      expect(plays, 1);
-      expect(fullTaps, 1);
-      expect(tester.takeException(), isNull);
-    },
-  );
+      ),
+    );
+    expect(tester.getSize(find.byKey(picture)), const Size(900, 400));
+    await tester.tap(find.byTooltip('Tạm dừng'));
+    await tester.tap(find.byTooltip('Thoát toàn màn hình'));
+    expect(plays, 1);
+    expect(fullTaps, 1);
+    expect(tester.takeException(), isNull);
+  });
 }

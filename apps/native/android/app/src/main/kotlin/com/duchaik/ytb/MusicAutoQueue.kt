@@ -78,7 +78,7 @@ class MusicAutoQueue(private val service: PlaybackService) {
         val seed = current.toMap()
         val generation = epoch
         val action = service.userActionRevision
-        var excluded = (hidden.toSet() + recent.toSet() + service.queue.items.mapNotNull { it["id"] as? String } + (seed["id"] as? String ?: ""))
+        var excluded = (hidden.toSet() + WatchedCompletion.ids(service) + recent.toSet() + service.queue.items.mapNotNull { it["id"] as? String } + (seed["id"] as? String ?: ""))
         val familiar = if (music && taste.ready) taste.familiar(excluded).take(6) else emptyList()
         val musicSeed = music
         // Known good music is immediately usable; discovery must never hold the queue empty.
@@ -111,7 +111,7 @@ class MusicAutoQueue(private val service: PlaybackService) {
                     pending = false
                     if(!enabled || service.queue.shorts || service.timerExpired || action != service.userActionRevision || revision != service.queue.revision) return@post
                     if(candidates.isEmpty()) { if(familiar.isEmpty()) error = "Chưa tìm được bài phù hợp. Sẽ thử lại."; retryAt = SystemClock.elapsedRealtime()+60000; return@post }
-                    service.queue.appendAutomatic(candidates.take(remaining))
+                    service.queue.appendAutomatic(candidates.filter { it["id"] !in WatchedCompletion.ids(service) }.take(remaining))
                     retryAt = SystemClock.elapsedRealtime()+15000
                     error = null
                 }

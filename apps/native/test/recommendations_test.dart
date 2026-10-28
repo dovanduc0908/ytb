@@ -1,13 +1,101 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ytb/recommendations.dart';
 import 'package:ytb/feed_repository.dart';
 
 void main() {
+  test('Feed shows available results while a slow source continues', () async {
+    final slow = Completer<Map<String, dynamic>>();
+    final feed = FeedRepository(
+      RecommendationProfile(),
+      'vn',
+      request: (method, args) {
+        if (method == 'charts') {
+          return Future.value({
+            'videos': [
+              {'id': 'fastvideo01', 'title': 'Fast'},
+            ],
+          });
+        }
+        return slow.future;
+      },
+    );
+    final first = await feed.next();
+    expect(first.videos.single['id'], 'fastvideo01');
+    expect(first.hasMore, true);
+    slow.complete({
+      'videos': [
+        {'id': 'slowvideo01', 'title': 'Slow'},
+      ],
+    });
+    final second = await feed.next();
+    expect(second.videos.any((v) => v['id'] == 'slowvideo01'), true);
+  });
   const tech = {
     'id': 'tech1234567',
     'title': 'Khám phá chip máy tính',
     'author': 'Chip Lab',
   };
+  test('Only videos at 95% or ended are excluded and persisted', () {
+    final p = RecommendationProfile()..enabled = false;
+    p.completed.add(tech['id']!); // The older 85% learning signal is separate.
+    expect(p.excludes(tech['id']), false);
+    expect(p.markFinished(tech, 94999, 100000), false);
+    expect(p.markFinished(tech, 95000, 100000), true);
+    expect(p.rank([tech]), isEmpty);
+    final restored = RecommendationProfile.fromJson(p.toJson());
+    expect(restored.excludes(tech['id']), true);
+    final other = {...tech, 'id': 'other123456'};
+    expect(restored.markFinished(other, 0, 0, ended: true), false);
+    expect(
+      restored.markFinished({...other, 'isLive': true}, 95000, 100000),
+      false,
+    );
+    expect(restored.markFinished(other, 0, 100000, ended: true), true);
+  });
+  test('Engaged videos seed related discovery and survive reload', () async {
+    final p = RecommendationProfile();
+    final before = {'id': tech['id'], 'playing': true, 'position': 0};
+    for (var i = 0; i < 15; i++) {
+      p.observe(
+        tech,
+        {...before, 'position': i * 1000},
+        {...before, 'position': (i + 1) * 1000, 'duration': 60000},
+        1000,
+      );
+    }
+    final restored = RecommendationProfile.fromJson(p.toJson());
+    expect(restored.discoverySeeds.single['id'], tech['id']);
+    final calls = <String>[];
+    final feed = FeedRepository(
+      restored,
+      'forYou',
+      request: (method, args) async {
+        calls.add('$method:${args['id'] ?? ''}');
+        return {
+          'videos': method == 'related'
+              ? [
+                  tech,
+                  {
+                    'id': 'related1234',
+                    'title': 'More chip news',
+                    'author': 'Other',
+                  },
+                ]
+              : <Video>[],
+        };
+      },
+    );
+    final page = await feed.next();
+    expect(calls, contains('related:${tech['id']}'));
+    expect(page.videos.map((v) => v['id']), contains('related1234'));
+    expect(page.videos.map((v) => v['id']), isNot(contains(tech['id'])));
+    restored.dismiss(tech);
+    expect(restored.discoverySeeds, isEmpty);
+    p.enabled = false;
+    expect(p.discoverySeeds, isEmpty);
+  });
   test(
     'Actual viewing trains interests; seeking, buffering and opt-out do not',
     () {

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/services.dart';
 
 import 'recommendations.dart';
@@ -81,6 +83,7 @@ class FeedRepository {
   final Set<String> seen = {};
   int cursorIndex = 0;
   bool initialized = false;
+  Future<void>? initialLoad;
   Object? lastError;
   static Future<Map<String, dynamic>> nativeRequest(
     String method,
@@ -89,16 +92,45 @@ class FeedRepository {
     await const MethodChannel('ytb/source').invokeMethod(method, args),
   );
 
-  void add(List<dynamic> items, String reason, {bool stale = false}) {
+  void add(
+    List<dynamic> items,
+    String reason, {
+    bool stale = false,
+    bool personalRelated = false,
+  }) {
     for (final item in items) {
       final v = Map<String, dynamic>.from(item as Map);
       final id = '${v['id']}';
       if (!RegExp(r'^[\w-]{11}$').hasMatch(id) ||
           seen.contains(id) ||
-          profile.hidden.contains(id)) {
+          profile.excludes(id)) {
         continue;
       }
-      pool.putIfAbsent(id, () => {...v, 'reason': reason, 'stale': stale});
+      if (personalRelated && pool.containsKey(id)) {
+        pool[id] = {...pool[id]!, 'reason': reason, 'personalRelated': true};
+      } else {
+        pool.putIfAbsent(
+          id,
+          () => {
+            ...v,
+            'reason': reason,
+            'stale': stale,
+            if (personalRelated) 'personalRelated': true,
+          },
+        );
+      }
+    }
+  }
+
+  Future<void> _related(Video seed) async {
+    try {
+      final data = await request('related', {'id': seed['id']});
+      final items = (data['videos'] as List? ?? [])
+          .where((v) => v is Map && v['id'] != seed['id'])
+          .toList();
+      add(items, 'Dựa trên video bạn đã xem', personalRelated: true);
+    } catch (_) {
+      // Related results are optional; search and charts still supply the feed.
     }
   }
 
@@ -140,20 +172,33 @@ class FeedRepository {
 
   Future<FeedPage> next() async {
     lastError = null;
+    pool.removeWhere((id, _) => profile.excludes(id));
     if (!initialized) {
       initialized = true;
-      await Future.wait([
+      final load = Future.wait([
         if (mode != 'world') chart('VN'),
         if (mode != 'vn') chart('GLOBAL'),
+        if (mode == 'forYou') ...profile.discoverySeeds.map(_related),
         ..._cursors.where((c) => c.personal).take(2).map(_fill),
         ..._cursors.where((c) => !c.personal).take(1).map(_fill),
         if (mode == 'forYou')
           ..._cursors.where((c) => c.region == 'US').take(1).map(_fill),
-      ]);
+      ]).then((_) {});
+      initialLoad = load;
+      unawaited(load.whenComplete(() => initialLoad = null));
+      // Do not make a usable first page wait for the slowest source.
+      try {
+        await load.timeout(const Duration(milliseconds: 1200));
+      } on TimeoutException {
+        if (pool.isEmpty) await load;
+      }
     }
+    // The initial requests own their cursors until they complete.
+    if (pool.isEmpty && initialLoad != null) await initialLoad;
     for (
       var attempt = 0;
-      (pool.length < 24 ||
+      initialLoad == null &&
+          (pool.length < 24 ||
               pool.values
                       .where((v) => '${v['reason']}'.startsWith('Khám phá'))
                       .length <
@@ -190,7 +235,9 @@ class FeedRepository {
     if (seen.length > 10000) seen.removeAll(seen.take(2000).toList());
     return FeedPage(
       result,
-      pool.isNotEmpty || _cursors.any((c) => !c.exhausted),
+      initialLoad != null ||
+          pool.isNotEmpty ||
+          _cursors.any((c) => !c.exhausted),
       result.isEmpty ? lastError : null,
     );
   }

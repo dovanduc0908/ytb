@@ -38,6 +38,39 @@ class MainActivity: FlutterActivity() {
     private var volumeFraction: Float? = null
     private var appliedVolume = -1
     private var resumed = false
+    private var fullscreen = false
+    private var orientationLocked = false
+    private var fullscreenVolume: Int? = null
+    private var fullscreenBrightness: Float? = null
+    private fun saveFullscreenSettings() {
+        val audio = getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
+        fullscreenVolume = audio.getStreamVolume(android.media.AudioManager.STREAM_MUSIC)
+        fullscreenBrightness = window.attributes.screenBrightness
+    }
+    private fun restoreFullscreenSettings() {
+        fullscreenVolume?.let { volume ->
+            val audio = getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
+            audio.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, volume, 0)
+            volumeFraction = null
+            appliedVolume = -1
+        }
+        fullscreenBrightness?.let { brightness ->
+            val attrs = window.attributes
+            attrs.screenBrightness = brightness
+            window.attributes = attrs
+        }
+        fullscreenVolume = null
+        fullscreenBrightness = null
+    }
+    private fun updateFullscreenOrientation() {
+        if (!fullscreen || orientationLocked) return
+        val size = PlaybackService.current?.player?.videoSize
+        val portrait = size != null && size.width > 0 && size.height > 0 &&
+            size.width * size.pixelWidthHeightRatio < size.height
+        val orientation = if (portrait) android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
+            else android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        if (requestedOrientation != orientation) requestedOrientation = orientation
+    }
     private var bridge: MethodChannel? = null
     private val lifecycleHandler = Handler(Looper.getMainLooper())
     private fun ensureService() {
@@ -59,9 +92,10 @@ class MainActivity: FlutterActivity() {
         lifecycleHandler.post { ensureService() }
     }
     override fun onPause() { resumed = false; super.onPause() }
-    override fun onDestroy() { tv?.release(); tv=null; voiceResult?.success(null);voiceResult=null;super.onDestroy() }
+    override fun onDestroy() { restoreFullscreenSettings(); tv?.release(); tv=null; voiceResult?.success(null);voiceResult=null;super.onDestroy() }
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "ytb/update").setMethodCallHandler(AppUpdater(this))
         tv = TvConnection(applicationContext)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "ytb/tv").setMethodCallHandler { call,result ->
             if(call.method=="mirror") {try{startActivity(Intent(android.provider.Settings.ACTION_CAST_SETTINGS));result.success(null)}catch(_:Exception){result.error("UNAVAILABLE","Máy không có màn hình truyền hệ thống. Trên Samsung, mở Smart View trong bảng cài đặt nhanh.",null)}}else tv!!.onMethodCall(call,result)
@@ -94,7 +128,12 @@ class MainActivity: FlutterActivity() {
         bridge!!.setMethodCallHandler { call, result ->
             if (call.method == "fullscreen") {
                 val enabled = call.argument<Boolean>("enabled") == true
-                requestedOrientation = if (enabled) android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE else android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                if (enabled && !fullscreen) saveFullscreenSettings()
+                if (!enabled && fullscreen) restoreFullscreenSettings()
+                fullscreen = enabled
+                orientationLocked = false
+                if (enabled) updateFullscreenOrientation()
+                else requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
                 val controller = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
                 controller.systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
                 if (enabled) controller.hide(androidx.core.view.WindowInsetsCompat.Type.systemBars())
@@ -102,7 +141,9 @@ class MainActivity: FlutterActivity() {
                 result.success(null); return@setMethodCallHandler
             }
             if (call.method == "lock") {
-                requestedOrientation = if (call.argument<Boolean>("enabled") == true) android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LOCKED else android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                orientationLocked = call.argument<Boolean>("enabled") == true
+                if (orientationLocked) requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LOCKED
+                else updateFullscreenOrientation()
                 result.success(null); return@setMethodCallHandler
             }
             if (call.method == "adjust") {
@@ -129,8 +170,8 @@ class MainActivity: FlutterActivity() {
                 return@setMethodCallHandler
             }
             if (call.method == "cacheSize") {
-                val size = call.argument<Number>("mb")?.toInt() ?: 256
-                if (size !in listOf(128, 256, 512)) { result.error("INVALID", "Dung lượng không hợp lệ", null); return@setMethodCallHandler }
+                val size = call.argument<Number>("mb")?.toInt() ?: 64
+                if (size !in listOf(64, 128, 256, 512)) { result.error("INVALID", "Dung lượng không hợp lệ", null); return@setMethodCallHandler }
                 getSharedPreferences("media-cache-settings", Context.MODE_PRIVATE).edit().putInt("sizeMb", size).apply()
                 result.success(null); return@setMethodCallHandler
             }
@@ -148,8 +189,25 @@ class MainActivity: FlutterActivity() {
                 result.success(if (prefs.contains(id)) prefs.getLong(id, 0L) else null)
                 return@setMethodCallHandler
             }
+            if (call.method == "discardedVideo") {
+                result.success(getSharedPreferences("view-progress", Context.MODE_PRIVATE).getString("discardedVideo", null))
+                return@setMethodCallHandler
+            }
+            if (call.method == "clearDiscardedVideo") {
+                val prefs = getSharedPreferences("view-progress", Context.MODE_PRIVATE)
+                if (prefs.getString("discardedVideo", null) == call.argument<String>("id")) prefs.edit().remove("discardedVideo").apply()
+                result.success(null); return@setMethodCallHandler
+            }
             if (call.method == "clearProgress") {
                 getSharedPreferences("view-progress", Context.MODE_PRIVATE).edit().clear().apply()
+                WatchedCompletion.clear(this)
+                result.success(null); return@setMethodCallHandler
+            }
+            if (call.method == "completedVideos") {
+                result.success(WatchedCompletion.ids(this).toList()); return@setMethodCallHandler
+            }
+            if (call.method == "markCompletedVideo") {
+                call.argument<String>("id")?.let { WatchedCompletion.add(this, it) }
                 result.success(null); return@setMethodCallHandler
             }
             val visiblePip = Build.VERSION.SDK_INT >= 26 && isInPictureInPictureMode
@@ -163,6 +221,12 @@ class MainActivity: FlutterActivity() {
             val p = service.player
             try {
                 when(call.method) {
+                    "offlineList" -> result.success(OfflineDownloads.list(this))
+                    "offlineStatus" -> result.success(OfflineDownloads.status())
+                    "offlineCancel" -> { OfflineDownloads.cancel(); result.success(null) }
+                    "offlineDelete" -> { OfflineDownloads.delete(this, call.argument<String>("id") ?: ""); result.success(null) }
+                    "offlineData" -> result.success(OfflineDownloads.data(this, call.argument<String>("id") ?: ""))
+                    "offlineStart" -> { OfflineDownloads.start(this, service.metadata, service.sources, call.argument<Boolean>("audioOnly") == true); result.success(null) }
                     "musicAuto" -> {
                         call.argument<Boolean>("enabled")?.let { service.musicQueue.setEnabled(it) }
                         if(call.argument<Boolean>("clear") == true) service.musicQueue.clearHistory()
@@ -192,7 +256,7 @@ class MainActivity: FlutterActivity() {
                     "seek" -> { p.seekTo((call.argument<Number>("position")?.toLong() ?: 0L).coerceAtLeast(0)); result.success(null) }
                     "speed" -> {
                         val rate = call.argument<Number>("value")!!.toFloat()
-                        require(rate >= .25f && rate <= 3.5f)
+                        require(rate >= .25f && rate <= 4f)
                         p.setPlaybackSpeed(rate); result.success(null)
                     }
                     "sources" -> {
@@ -206,6 +270,7 @@ class MainActivity: FlutterActivity() {
                         service.selectQuality(call.argument<Number>("height")!!.toInt())
                         result.success(null)
                     }
+                    "audioOnly" -> { service.setAudioOnly(call.argument<Boolean>("enabled") == true); result.success(null) }
                     "timer" -> { service.setSleepTimer(call.argument<Number>("milliseconds")!!.toLong()); result.success(null) }
                     "pip" -> {
                         if(Build.VERSION.SDK_INT >= 26 && packageManager.hasSystemFeature("android.software.picture_in_picture")) {
@@ -213,6 +278,7 @@ class MainActivity: FlutterActivity() {
                         } else result.success(false)
                     }
                     "state" -> {
+                        updateFullscreenOrientation()
                         val heights = service.sources.map{(it["height"] as Number).toInt()}.toSet()
                         val keepScreenOn = WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
                         val alreadyOn = window.attributes.flags and keepScreenOn != 0
@@ -220,7 +286,7 @@ class MainActivity: FlutterActivity() {
                             if(p.isPlaying) window.addFlags(keepScreenOn)
                             else window.clearFlags(keepScreenOn)
                         }
-                        result.success(mapOf("queueError" to service.queue.error, "metadata" to service.metadata, "musicAuto" to service.musicQueue.enabled,
+                        result.success(mapOf("audioOnly" to service.audioOnly, "stopAtEnd" to service.stopAtEnd, "queueError" to service.queue.error, "metadata" to service.metadata, "musicAuto" to service.musicQueue.enabled,
                             "musicLearning" to service.musicQueue.learningCount, "isMusic" to service.musicQueue.music, "musicError" to service.musicQueue.error,
                             "captionTracks" to service.captionTracks.map { it.filterKeys { key -> key != "url" } }, "captionSelected" to service.captionSelected, "captionStatus" to service.captionStatus, "captionText" to service.captionText(), "chapters" to service.chapters, "chaptersLoading" to service.chaptersLoading, "qualityMode" to service.qualityMode, "bandwidthSamples" to service.bandwidthSamples,
                             "audioBitrate" to service.audioBitrate, "audioGain" to service.audioGain.toDouble(), "audioUnderruns" to service.audioUnderruns,

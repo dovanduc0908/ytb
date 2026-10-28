@@ -114,100 +114,105 @@ class _RelatedPanelState extends State<RelatedPanel> {
   }
 
   @override
-  Widget build(BuildContext context) => CustomScrollView(
-    key: const Key('related-scroll'),
-    controller: scroll,
-    slivers: [
-      SliverToBoxAdapter(child: widget.header),
-      SliverToBoxAdapter(
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Tìm bài tiếp theo',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 12),
-              VideoSearchBox(
-                controller: input,
-                onSearch: (q) {
-                  mode = 'Tìm kiếm';
-                  reset(q);
-                },
-                onPreview: (q) =>
-                    const MethodChannel('ytb/source')
-                        .invokeMethod('previewSearch', {'query': q}),
-              ),
-              const SizedBox(height: 12),
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children:
-                      [
-                            'Liên quan',
-                            'Karaoke',
-                            'Beat',
-                            'Tông nam',
-                            'Tông nữ',
-                            'Song ca',
-                          ]
-                          .map(
-                            (label) => Padding(
-                              padding: const EdgeInsets.only(right: 8),
-                              child: ChoiceChip(
-                                label: Text(label),
-                                selected: mode == label,
-                                onSelected: (_) {
-                                  setState(() => mode = label);
-                                  final base = input.text.trim().isEmpty
-                                      ? '${widget.seed['title'] ?? ''}'
-                                      : input.text.trim();
-                                  reset(
-                                    label == 'Liên quan'
-                                        ? ''
-                                        : '$base ${label == 'Karaoke' ? 'karaoke' : 'karaoke $label'}',
-                                  );
-                                },
-                              ),
-                            ),
-                          )
-                          .toList(),
+  Widget build(BuildContext context) {
+    final visibleItems = items
+        .where((v) => !widget.hidden.contains(v['id']))
+        .toList();
+    return CustomScrollView(
+      key: const Key('related-scroll'),
+      controller: scroll,
+      slivers: [
+        SliverToBoxAdapter(child: widget.header),
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Tìm bài tiếp theo',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
-              ),
-            ],
+                const SizedBox(height: 12),
+                VideoSearchBox(
+                  controller: input,
+                  onSearch: (q) {
+                    mode = 'Tìm kiếm';
+                    reset(q);
+                  },
+                  onPreview: (q) =>
+                      const MethodChannel('ytb/source')
+                          .invokeMethod('previewSearch', {'query': q}),
+                ),
+                const SizedBox(height: 12),
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children:
+                        [
+                              'Liên quan',
+                              'Karaoke',
+                              'Beat',
+                              'Tông nam',
+                              'Tông nữ',
+                              'Song ca',
+                            ]
+                            .map(
+                              (label) => Padding(
+                                padding: const EdgeInsets.only(right: 8),
+                                child: ChoiceChip(
+                                  label: Text(label),
+                                  selected: mode == label,
+                                  onSelected: (_) {
+                                    setState(() => mode = label);
+                                    final base = input.text.trim().isEmpty
+                                        ? '${widget.seed['title'] ?? ''}'
+                                        : input.text.trim();
+                                    reset(
+                                      label == 'Liên quan'
+                                          ? ''
+                                          : '$base ${label == 'Karaoke' ? 'karaoke' : 'karaoke $label'}',
+                                    );
+                                  },
+                                ),
+                              ),
+                            )
+                            .toList(),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
-      ),
-      SliverList.builder(
-        itemCount: items.length,
-        itemBuilder: (_, i) => widget.itemBuilder(items[i]),
-      ),
-      SliverToBoxAdapter(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: loading
-              ? const Center(child: CircularProgressIndicator())
-              : Column(
-                  children: [
-                    if (error != null) Text(error!),
-                    if (more)
-                      TextButton(
-                        onPressed: () {
-                          error = null;
-                          load();
-                        },
-                        child: const Text('Tải thêm video'),
-                      )
-                    else
-                      const Text(
-                        'Đã hết kết quả phù hợp. Bạn có thể tìm bài khác.',
-                      ),
-                  ],
-                ),
+        SliverList.builder(
+          itemCount: visibleItems.length,
+          itemBuilder: (_, i) => widget.itemBuilder(visibleItems[i]),
         ),
-      ),
-    ],
-  );
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: loading
+                ? const Center(child: CircularProgressIndicator())
+                : Column(
+                    children: [
+                      if (error != null) Text(error!),
+                      if (more)
+                        TextButton(
+                          onPressed: () {
+                            error = null;
+                            load();
+                          },
+                          child: const Text('Tải thêm video'),
+                        )
+                      else
+                        const Text(
+                          'Đã hết kết quả phù hợp. Bạn có thể tìm bài khác.',
+                        ),
+                    ],
+                  ),
+          ),
+        ),
+      ],
+    );
+  }
 }

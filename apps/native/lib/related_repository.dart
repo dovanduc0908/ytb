@@ -72,6 +72,8 @@ class RelatedRepository {
         } else {
           token = next;
         }
+        // Show the first useful batch immediately; fetch continuations in the background.
+        if (pool.isNotEmpty) break;
       } catch (e) {
         error = e;
         // Related discovery is optional; continue via contextual search.

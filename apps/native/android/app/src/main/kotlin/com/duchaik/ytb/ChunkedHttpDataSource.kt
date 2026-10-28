@@ -57,5 +57,5 @@ class ChunkedHttpDataSource(headers: Map<String, String>) : DataSource {
         return count
     }
     override fun close() {if(opened)upstream.close();opened=false;spec=null}
-    companion object {private const val CHUNK=8L*1024*1024}
+    companion object {private const val CHUNK=512L*1024}
 }

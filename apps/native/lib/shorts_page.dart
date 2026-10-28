@@ -85,7 +85,7 @@ class _ShortsPageState extends State<ShortsPage> {
         for (final raw in d['videos'] as List? ?? []) {
           final v = Map<String, dynamic>.from(raw);
           if (v['isShort'] == true &&
-              !widget.profile.hidden.contains(v['id']) &&
+              !widget.profile.excludes(v['id']) &&
               seen.add('${v['id']}')) {
             items.add(v);
           }

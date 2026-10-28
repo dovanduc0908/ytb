@@ -39,10 +39,11 @@ class OnDeviceSource(private val context: Context) : MethodChannel.MethodCallHan
     private val charts = YouTubeCharts(context)
     private val collections = YouTubeCollections()
     private val discoveryWorkers = Executors.newFixedThreadPool(3)
+    private val relatedWorkers = Executors.newFixedThreadPool(3)
     private val previewWorkers = Executors.newSingleThreadExecutor()
     private val previewGeneration = java.util.concurrent.atomic.AtomicLong()
     private val prefetchGeneration = java.util.concurrent.atomic.AtomicLong()
-    private val prefetchWorkers = Executors.newFixedThreadPool(2)
+    private val prefetchWorkers = Executors.newSingleThreadExecutor()
     private val flights = java.util.concurrent.ConcurrentHashMap<String, java.util.concurrent.CompletableFuture<Map<String, Any?>>>()
     private val suggestionGeneration = java.util.concurrent.atomic.AtomicLong()
     private val deadlines = Executors.newSingleThreadScheduledExecutor()
@@ -71,7 +72,7 @@ class OnDeviceSource(private val context: Context) : MethodChannel.MethodCallHan
         if (call.method == "prefetch") {
             cancelPrefetch()
             val generation = prefetchGeneration.get()
-            val ids = call.argument<List<String>>("ids")?.take(2) ?: emptyList()
+            val ids = call.argument<List<String>>("ids")?.take(1) ?: emptyList()
             ids.filter { Regex("^[A-Za-z0-9_-]{11}$").matches(it) }.forEach { id ->
                 prefetchWorkers.execute { if (generation == prefetchGeneration.get()) runCatching { StartupCache.prepare(context, resolve(id, true)) { generation == prefetchGeneration.get() } } }
             }
@@ -79,7 +80,7 @@ class OnDeviceSource(private val context: Context) : MethodChannel.MethodCallHan
         }
         if (call.method !in listOf("search", "charts", "discover", "related", "shorts", "channel", "suggest", "resolve", "resolveFull")) { result.notImplemented(); return }
         val generation = if (call.method == "suggest") suggestionGeneration.incrementAndGet() else 0
-        val executor = when (call.method) { "charts", "discover", "related", "shorts", "channel" -> discoveryWorkers; "search" -> searchWorkers; "suggest" -> suggestWorkers; else -> workers }
+        val executor = when (call.method) { "related" -> relatedWorkers; "charts", "discover", "shorts", "channel" -> discoveryWorkers; "search" -> searchWorkers; "suggest" -> suggestWorkers; else -> workers }
         executor.execute {
             val started = SystemClock.elapsedRealtime()
             try {

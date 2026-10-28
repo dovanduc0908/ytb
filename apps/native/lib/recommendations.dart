@@ -8,7 +8,27 @@ class RecommendationProfile {
   final Map<String, double> weights = {};
   final Map<String, String> authors = {};
   final Map<String, int> watched = {};
+  final Map<String, Video> seeds = {};
   final Set<String> completed = {}, hidden = {};
+  final Set<String> finished = {};
+  bool excludes(Object? id) => hidden.contains(id) || finished.contains(id);
+
+  bool markFinished(
+    Video video,
+    num position,
+    num duration, {
+    bool ended = false,
+  }) {
+    final id = '${video['id'] ?? ''}';
+    if (video['isLive'] == true ||
+        duration <= 0 ||
+        !RegExp(r'^[\w-]{11}$').hasMatch(id) ||
+        (!ended && position < duration * .95)) {
+      return false;
+    }
+    return finished.add(id);
+  }
+
   DateTime updated = DateTime.now();
   static const stop = {
     'the',
@@ -102,6 +122,7 @@ class RecommendationProfile {
     final credited = min(elapsedMs, max(0, 600000 - previous));
     watched.remove(id);
     watched[id] = previous + credited;
+    rememberSeed(video);
     if (watched.length > 250) {
       final oldest = watched.keys.first;
       watched.remove(oldest);
@@ -118,10 +139,41 @@ class RecommendationProfile {
     return credited;
   }
 
+  void rememberSeed(Video video) {
+    final id = '${video['id'] ?? ''}';
+    if (enabled &&
+        !hidden.contains(id) &&
+        (watched[id] ?? 0) >= 15000 &&
+        RegExp(r'^[\w-]{11}$').hasMatch(id)) {
+      seeds.remove(id);
+      seeds[id] = {
+        'id': id,
+        'title': '${video['title'] ?? ''}',
+        'author': '${video['author'] ?? ''}',
+      };
+      if (seeds.length > 50) seeds.remove(seeds.keys.first);
+    }
+  }
+
   void dismiss(Video video) {
     hidden.add('${video['id']}');
+    seeds.remove('${video['id']}');
     if (hidden.length > 1500) hidden.remove(hidden.first);
     boost(video, -1.5);
+  }
+
+  /// Recent engaged videos from different creators give discovery a useful mix.
+  List<Video> get discoverySeeds {
+    if (!enabled) return [];
+    final result = <Video>[];
+    final creators = <String>{};
+    for (final video in seeds.values.toList().reversed) {
+      final creator = '${video['author'] ?? ''}'.trim().toLowerCase();
+      if (creator.isNotEmpty && !creators.add(creator)) continue;
+      result.add(video);
+      if (result.length == 3) break;
+    }
+    return result;
   }
 
   List<String> get queries {
@@ -144,6 +196,7 @@ class RecommendationProfile {
   double score(Video v, int day) {
     var value = 1 / (1 + (v['rank'] as num? ?? 20) / 10);
     if (enabled) {
+      if (v['personalRelated'] == true) value += 3;
       value += weights['a:${'${v['author'] ?? ''}'.toLowerCase()}'] ?? 0;
       for (final term in terms(v)) {
         value += (weights['t:$term'] ?? 0) * .25;
@@ -169,7 +222,7 @@ class RecommendationProfile {
     final day = (now ?? DateTime.now()).millisecondsSinceEpoch ~/ 86400000;
     final unique = <String, Video>{};
     for (final v in candidates) {
-      if (!hidden.contains(v['id'])) unique.putIfAbsent('${v['id']}', () => v);
+      if (!excludes(v['id'])) unique.putIfAbsent('${v['id']}', () => v);
     }
     // Tokenize and score each candidate once, rather than at every sort comparison.
     final scores = {for (final v in unique.values) v['id']: score(v, day)};
@@ -198,8 +251,10 @@ class RecommendationProfile {
     'weights': weights,
     'authors': authors,
     'watched': watched,
+    'seeds': seeds.values.toList(),
     'completed': completed.toList(),
     'hidden': hidden.toList(),
+    'finished': finished.toList(),
     'updated': updated.toIso8601String(),
   };
   static RecommendationProfile fromJson(Map<String, dynamic> data) {
@@ -215,8 +270,15 @@ class RecommendationProfile {
         (k, v) => MapEntry(k.toString(), (v as num).toInt()),
       ),
     );
+    for (final raw in (data['seeds'] as List? ?? [])) {
+      if (raw is! Map) continue;
+      final video = Map<String, dynamic>.from(raw);
+      final id = '${video['id'] ?? ''}';
+      if (RegExp(r'^[\w-]{11}$').hasMatch(id)) p.seeds[id] = video;
+    }
     p.completed.addAll((data['completed'] as List? ?? []).cast<String>());
     p.hidden.addAll((data['hidden'] as List? ?? []).cast<String>());
+    p.finished.addAll((data['finished'] as List? ?? []).cast<String>());
     p.updated = DateTime.tryParse('${data['updated']}') ?? DateTime.now();
     p.decay(DateTime.now());
     return p;

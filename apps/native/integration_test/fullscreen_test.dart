@@ -102,9 +102,9 @@ void main() {
           const Offset(0, -70),
         );
         await tester.pump(const Duration(milliseconds: 200));
-        expect(find.byKey(const Key('adjustment-volume')), findsOneWidget);
+        expect(find.byKey(const Key('adjustment-brightness')), findsOneWidget);
         expect(
-          tester.getRect(find.byKey(const Key('adjustment-volume'))).right,
+          tester.getRect(find.byKey(const Key('adjustment-brightness'))).right,
           lessThan(viewportRect.center.dx),
         );
         await tester.dragFrom(
@@ -115,9 +115,9 @@ void main() {
           const Offset(0, -70),
         );
         await tester.pump(const Duration(milliseconds: 200));
-        expect(find.byKey(const Key('adjustment-brightness')), findsOneWidget);
+        expect(find.byKey(const Key('adjustment-volume')), findsOneWidget);
         expect(
-          tester.getRect(find.byKey(const Key('adjustment-brightness'))).left,
+          tester.getRect(find.byKey(const Key('adjustment-volume'))).left,
           greaterThan(viewportRect.center.dx),
         );
         debugPrint('ICON_QA_BRIGHTNESS');

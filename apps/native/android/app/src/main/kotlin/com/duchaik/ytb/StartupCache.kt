@@ -19,7 +19,7 @@ object StartupCache {
 
     @Synchronized private fun cache(context: Context): SimpleCache {
         return cache ?: SimpleCache(File(context.cacheDir, "media-startup"),
-            LeastRecentlyUsedCacheEvictor(context.getSharedPreferences("media-cache-settings", Context.MODE_PRIVATE).getInt("sizeMb", 256).coerceIn(128, 512).toLong() * 1024 * 1024), StandaloneDatabaseProvider(context.applicationContext))
+            LeastRecentlyUsedCacheEvictor(context.getSharedPreferences("media-cache-settings", Context.MODE_PRIVATE).getInt("sizeMb", 64).coerceIn(64, 512).toLong() * 1024 * 1024), StandaloneDatabaseProvider(context.applicationContext))
             .also { cache = it }
     }
     fun clear(context: Context) {
@@ -39,8 +39,8 @@ object StartupCache {
     fun prepare(context: Context, data: Map<String, Any?>, valid: () -> Boolean = { true }) {
         if (!unmetered(context)) return
         val tracks = data["tracks"] as? List<Map<String, Any?>> ?: return
-        val selected = tracks.filter { (it["height"] as Number).toInt() <= 720 }.maxByOrNull { (it["height"] as Number).toInt() } ?: tracks.first()
-        for ((urlKey, headerKey, bytes) in listOf(Triple("url", "headers", 768L * 1024), Triple("audioUrl", "audioHeaders", 128L * 1024))) {
+        val selected = tracks.filter { (it["height"] as Number).toInt() <= 480 }.maxByOrNull { (it["height"] as Number).toInt() } ?: tracks.minByOrNull { (it["height"] as Number).toInt() } ?: return
+        for ((urlKey, headerKey, bytes) in listOf(Triple("url", "headers", 384L * 1024), Triple("audioUrl", "audioHeaders", 96L * 1024))) {
             if (!valid()) return
             val url = selected[urlKey] as? String ?: continue
             val source = factory(context, selected[headerKey] as? Map<String, String> ?: emptyMap()).createDataSource()

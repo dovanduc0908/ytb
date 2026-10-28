@@ -62,6 +62,7 @@ class _PlayerOverlayState extends State<PlayerOverlay> {
   Timer? feedbackTimer, lockTimer, meterTimer;
   String? meterKind;
   double meterValue = 0;
+  double? heldSpeed;
   int meterGeneration = 0;
   void showMeter(String kind, double value) {
     meterTimer?.cancel();
@@ -180,8 +181,8 @@ class _PlayerOverlayState extends State<PlayerOverlay> {
                           origin.dx < box.maxWidth * .68
                     ? 'speed'
                     : origin.dx < box.maxWidth / 2
-                    ? 'volume'
-                    : 'brightness';
+                    ? 'brightness'
+                    : 'volume';
                 if (mode == 'pan') {
                   setState(
                     () => pan = Offset(
@@ -267,6 +268,15 @@ class _PlayerOverlayState extends State<PlayerOverlay> {
                     enabled: !locked && !loading && duration > 0,
                     onToggle: onToggle,
                     onSeek: onSeek,
+                    onHoldStart: () {
+                      heldSpeed = (state['speed'] as num? ?? 1).toDouble();
+                      widget.onSpeed?.call(2.0);
+                      hint('Giữ để phát 2×');
+                    },
+                    onHoldEnd: () {
+                      if (heldSpeed != null) widget.onSpeed?.call(heldSpeed!);
+                      heldSpeed = null;
+                    },
                   ),
                 ),
               ),
@@ -450,41 +460,47 @@ class _PlayerOverlayState extends State<PlayerOverlay> {
                           children: [
                             Padding(
                               padding: const EdgeInsets.only(left: 12),
-                              child: Row(
-                                children: [
-                                  Text(
-                                    '${formatTime(sliderPreview ?? seekTarget ?? position)} / ${formatTime(duration)}',
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 12,
+                              child: SizedBox(
+                                height: 40,
+                                child: Row(
+                                  children: [
+                                    Text(
+                                      '${formatTime(sliderPreview ?? seekTarget ?? position)} / ${formatTime(duration)}',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 12,
+                                      ),
                                     ),
-                                  ),
-                                  const Spacer(),
-                                  IconButton(
-                                    tooltip: fullscreen
-                                        ? 'Thu nhỏ'
-                                        : 'Toàn màn hình',
-                                    onPressed: onFullscreen,
-                                    icon: Icon(
-                                      fullscreen
-                                          ? Icons.fullscreen_exit
-                                          : Icons.fullscreen,
-                                      color: Colors.white,
+                                    const Spacer(),
+                                    IconButton(
+                                      tooltip: fullscreen
+                                          ? 'Thu nhỏ'
+                                          : 'Toàn màn hình',
+                                      onPressed: onFullscreen,
+                                      icon: Icon(
+                                        fullscreen
+                                            ? Icons.fullscreen_exit
+                                            : Icons.fullscreen,
+                                        color: Colors.white,
+                                      ),
                                     ),
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
                             ),
                             SizedBox(
-                              height: 18,
+                              height: 24,
                               child: SliderTheme(
                                 data: SliderTheme.of(context).copyWith(
-                                  trackHeight: 2,
+                                  trackHeight: 4,
+                                  activeTrackColor: const Color(0xffff315a),
+                                  inactiveTrackColor: Colors.white60,
+                                  thumbColor: Colors.white,
                                   thumbShape: const RoundSliderThumbShape(
-                                    enabledThumbRadius: 5,
+                                    enabledThumbRadius: 7,
                                   ),
                                   overlayShape: const RoundSliderOverlayShape(
-                                    overlayRadius: 12,
+                                    overlayRadius: 16,
                                   ),
                                 ),
                                 child: SeekSlider(
@@ -544,8 +560,12 @@ class _PlayerOverlayState extends State<PlayerOverlay> {
                   )
                 else
                   Positioned(
-                    left: meterKind == 'volume' ? 20 : null,
-                    right: meterKind == 'brightness' ? 20 : null,
+                    left: meterKind == 'brightness'
+                        ? (box.maxWidth / 2 - 180).clamp(12.0, double.infinity)
+                        : null,
+                    right: meterKind == 'volume'
+                        ? (box.maxWidth / 2 - 180).clamp(12.0, double.infinity)
+                        : null,
                     top: 0,
                     bottom: 0,
                     child: IgnorePointer(
@@ -576,7 +596,9 @@ class _PlayerOverlayState extends State<PlayerOverlay> {
                 Positioned(
                   left: 0,
                   right: 0,
-                  bottom: fullscreen ? 45 : 32,
+                  bottom: sliderPreview != null
+                      ? (fullscreen ? 58 : 44)
+                      : (fullscreen ? 45 : 32),
                   child: IgnorePointer(
                     child: LayoutBuilder(
                       builder: (context, constraints) {
@@ -723,7 +745,10 @@ class SeekGestureSurface extends StatefulWidget {
     required this.enabled,
     required this.onToggle,
     required this.onSeek,
+    this.onHoldStart,
+    this.onHoldEnd,
   });
+  final VoidCallback? onHoldStart, onHoldEnd;
   final int position, duration;
   final bool enabled;
   final VoidCallback onToggle;
@@ -779,6 +804,10 @@ class _SeekGestureSurfaceState extends State<SeekGestureSurface> {
       onTap: widget.onToggle,
       onDoubleTapDown: (event) => x = event.localPosition.dx,
       onDoubleTap: () => seek(box.maxWidth),
+      onLongPressStart: widget.enabled
+          ? (_) => widget.onHoldStart?.call()
+          : null,
+      onLongPressEnd: widget.enabled ? (_) => widget.onHoldEnd?.call() : null,
       child: Semantics(
         label: 'Hiện điều khiển video',
         button: true,

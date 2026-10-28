@@ -3,6 +3,11 @@ package com.duchaik.ytb
 /** Conservative policy for sources with independent video URLs. */
 object AdaptiveQuality {
     data class Variant(val height: Int, val bitrate: Long)
+    fun dataSaverVariants(variants: List<Variant>, unmetered: Boolean): List<Variant> {
+        val valid = variants.filter { it.height > 0 }.sortedBy { it.height }
+        val withinLimit = valid.filter { it.height <= if (unmetered) 480 else 360 }
+        return withinLimit.ifEmpty { valid.take(1) }
+    }
     fun candidate(variants: List<Variant>, bandwidth: Long, audioBitrate: Long, speed: Float): Int? {
         if (bandwidth <= 0 || variants.size < 2) return null
         val known = variants.filter { it.height > 0 && it.bitrate > 0 }.sortedBy { it.height }

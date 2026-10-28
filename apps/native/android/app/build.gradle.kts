@@ -5,6 +5,7 @@ plugins {
 }
 
 android {
+    buildFeatures { resValues = true }
     namespace = "com.duchaik.ytb"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
@@ -39,14 +40,31 @@ android {
         // flag during build.
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        val updateProject = System.getenv("YTB_UPDATE_REPOSITORY") ?: "dovanduc0908/ytb"
+        require(updateProject.matches(Regex("[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+"))) { "Invalid update repository" }
+        resValue("string", "update_release_api", "https://api.github.com/repos/$updateProject/releases/latest")
     }
 
+    val keyPath = System.getenv("YTB_ANDROID_KEYSTORE")
+    val releaseKeyPassword = System.getenv("YTB_ANDROID_KEY_PASSWORD")
+    val releaseStorePassword = System.getenv("YTB_ANDROID_STORE_PASSWORD")
+    val releaseKeyAlias = System.getenv("YTB_ANDROID_KEY_ALIAS")
+    val hasReleaseKey = !keyPath.isNullOrBlank() && !releaseKeyPassword.isNullOrBlank() && !releaseStorePassword.isNullOrBlank() && !releaseKeyAlias.isNullOrBlank()
+    if (listOf(keyPath, releaseKeyPassword, releaseStorePassword, releaseKeyAlias).any { !it.isNullOrBlank() }) {
+        require(hasReleaseKey) { "Set all YTB_ANDROID signing variables together" }
+    }
+    val configuredRelease = if (hasReleaseKey) signingConfigs.create("configuredRelease") {
+        storeFile = file(keyPath!!)
+        this.storePassword = releaseStorePassword
+        this.keyAlias = releaseKeyAlias
+        this.keyPassword = releaseKeyPassword
+    } else null
     buildTypes {
         release {
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             // TODO: Add your own signing config for the release build.
             // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = configuredRelease ?: signingConfigs.getByName("debug")
         }
     }
 }

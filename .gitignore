@@ -1,0 +1,11 @@
+# Local test captures, generated releases and build dependencies
+/artifacts/
+/outputs/
+/gen/
+/services/source_provider/node_modules/
+/apps/native/android/build/
+.DS_Store
+*.jks
+*.keystore
+.env
+.env.*

@@ -38,6 +38,8 @@ const speeds = [
   3.0,
   3.25,
   3.5,
+  3.75,
+  4.0,
 ];
 String clock(num ms) {
   final s = (ms / 1000).floor().clamp(0, 999999);
@@ -68,6 +70,8 @@ String? videoId(String input) {
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+  PaintingBinding.instance.imageCache.maximumSizeBytes = 16 * 1024 * 1024;
+  PaintingBinding.instance.imageCache.maximumSize = 100;
   runApp(const YtbApp());
 }
 
@@ -406,7 +410,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
           key: const ValueKey('karaoke'),
           seed: const {'id': '', 'title': 'karaoke Việt Nam'},
           header: const SizedBox.shrink(),
-          hidden: profile.hidden,
+          hidden: {...profile.hidden, ...profile.finished},
           initialQuery: 'karaoke Việt Nam',
           itemBuilder: queuedRow,
         ),
@@ -497,15 +501,19 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     unawaited(
       source
           .invokeMethod('prefetch', {
-            'ids': cards.take(2).map((v) => v['id']).toList(),
+            'ids': cards.take(1).map((v) => v['id']).toList(),
           })
           .catchError((_) => null),
     );
-    for (final v in cards.take(6)) {
+    for (final v in cards.take(3)) {
       unawaited(
         precacheImage(
-          NetworkImage(
-            v['thumbnail'] ?? 'https://i.ytimg.com/vi/${v['id']}/hqdefault.jpg',
+          ResizeImage(
+            NetworkImage(
+              v['thumbnail'] ??
+                  'https://i.ytimg.com/vi/${v['id']}/hqdefault.jpg',
+            ),
+            width: 480,
           ),
           context,
         ),
@@ -559,7 +567,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
           36 * 3600000) {
         cached = (data['videos'] as List? ?? [])
             .map((v) => Map<String, dynamic>.from(v))
-            .where((v) => !profile.hidden.contains(v['id']))
+            .where((v) => !profile.excludes(v['id']))
             .toList();
       }
     } catch (_) {}
@@ -624,9 +632,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
         if (!mounted || seq != searchGeneration) return;
         preparedPage = null;
         if (page.error != null) throw page.error!;
-        extra = page.videos
-            .where((v) => !profile.hidden.contains(v['id']))
-            .toList();
+        extra = page.videos.where((v) => !profile.excludes(v['id'])).toList();
         hasMore = page.hasMore;
         if (hasMore) preparedPage = current.next();
       } else {
@@ -801,6 +807,15 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
             .toList();
         if (key == 'history') {
           for (final video in data) {
+            if (profile.markFinished(
+              video,
+              (video['position'] as num?) ?? 0,
+              ((video['duration'] as num?) ?? 0) * 1000,
+            )) {
+              unawaited(
+                player.invokeMethod('markCompletedVideo', {'id': video['id']}),
+              );
+            }
             video['position'] = resumePosition(
               duration:
                   (video['duration'] is num
@@ -813,11 +828,27 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
             );
           }
           history = data;
+          if (profile.seeds.isEmpty) {
+            for (final video in history.reversed) {
+              if (video['isShort'] != true) profile.rememberSeed(video);
+            }
+          }
         } else {
           saved = data;
         }
       } catch (_) {}
     }
+    try {
+      final discarded = await player.invokeMethod<String>('discardedVideo');
+      if (discarded != null) {
+        for (final video in history.where((v) => v['id'] == discarded)) {
+          video['position'] = 0;
+        }
+        await prefs?.setString('history', jsonEncode(history));
+        await player.invokeMethod('clearDiscardedVideo', {'id': discarded});
+      }
+    } on PlatformException catch (_) {}
+    await syncFinishedVideos();
     if (mounted) setState(() {});
     if (mounted && submittedQuery.isEmpty) await loadFeed();
   }
@@ -840,11 +871,27 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     if (s != AppLifecycleState.resumed) {
       persistProgress();
       saveProfile();
-    } else if (isFeed &&
-        !watch &&
-        feedDay != DateTime.now().toIso8601String().substring(0, 10)) {
-      loadFeed();
+    } else {
+      unawaited(syncFinishedVideos());
+      if (isFeed &&
+          !watch &&
+          feedDay != DateTime.now().toIso8601String().substring(0, 10)) {
+        loadFeed();
+      }
     }
+  }
+
+  Future<void> syncFinishedVideos() async {
+    try {
+      final ids =
+          await player.invokeListMethod<String>('completedVideos') ?? [];
+      profile.finished.addAll(ids);
+      shortsProfile.finished.addAll(profile.finished);
+      if (mounted && isFeed) {
+        setState(() => videos.removeWhere((v) => profile.excludes(v['id'])));
+      }
+      await saveProfile();
+    } on PlatformException catch (_) {}
   }
 
   Future<Map<String, dynamic>> api(
@@ -983,25 +1030,26 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
         state = {};
       });
     }
-    await command('pause');
     try {
-      final data = tvConnected
-          ? Map<String, dynamic>.from(v)
-          : await api(
-              forceFull ? '/resolveFull' : '/resolve',
-              body: {'id': v['id']},
-            );
+      // Resolve the new source while stopping playback and reading saved progress.
+      final results = await Future.wait<dynamic>([
+        tvConnected
+            ? Future.value(Map<String, dynamic>.from(v))
+            : api(
+                forceFull ? '/resolveFull' : '/resolve',
+                body: {'id': v['id']},
+              ),
+        command('pause'),
+        if (!tvConnected)
+          player
+              .invokeMethod<int>('savedProgress', {'id': v['id']})
+              .catchError((_) => null),
+      ]);
+      final data = results[0] as Map<String, dynamic>;
       if (!mounted || seq != loadGeneration) return;
       final previous = history.where((x) => x['id'] == v['id']).firstOrNull;
       final legacyPosition = (previous?['position'] as num?)?.toInt() ?? 0;
-      int? nativePosition;
-      if (!tvConnected) {
-        try {
-          nativePosition = await player.invokeMethod<int>('savedProgress', {
-            'id': v['id'],
-          });
-        } on PlatformException catch (_) {}
-      }
+      final nativePosition = results.length > 2 ? results[2] as int? : null;
       final duration = (data['duration'] as num?)?.toInt() ?? 0;
       final resume = resumePosition(
         duration: duration * 1000,
@@ -1064,6 +1112,19 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
         unawaited(loadFeed());
       }
       if (active != null && d != null && !resolving) {
+        if (d['id'] == active!['id'] &&
+            profile.markFinished(
+              active!,
+              (d['position'] as num?) ?? 0,
+              (d['duration'] as num?) ?? 0,
+              ended: d['ended'] == true,
+            )) {
+          shortsProfile.finished.add('${active!['id']}');
+          unawaited(
+            player.invokeMethod('markCompletedVideo', {'id': active!['id']}),
+          );
+          unawaited(saveProfile());
+        }
         sessionWatchMs += (tab == 1 ? shortsProfile : profile).observe(
           active!,
           state,
@@ -1190,27 +1251,53 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     );
   }
 
-  void speedSheet() => sheet(
-    'Tốc độ phát',
-    Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: speeds
-          .map(
-            (s) => ChoiceChip(
-              label: Text('${s.toString().replaceAll(RegExp(r'\.0$'), '')}×'),
-              selected: (state['speed'] ?? preferredSpeed) == s,
-              onSelected: (_) async {
-                await command('speed', {'value': s});
-                preferredSpeed = s;
-
-                if (mounted) Navigator.pop(context);
+  void speedSheet() {
+    double selected = (state['speed'] as num? ?? preferredSpeed)
+        .toDouble()
+        .clamp(.25, 4.0);
+    sheet(
+      'Tốc độ phát',
+      StatefulBuilder(
+        builder: (context, update) => Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              '${selected.toStringAsFixed(2)}×',
+              style: const TextStyle(fontSize: 24),
+            ),
+            Slider(
+              value: selected,
+              min: .25,
+              max: 4,
+              divisions: 75,
+              label: '${selected.toStringAsFixed(2)}×',
+              onChanged: (value) => update(() => selected = value),
+              onChangeEnd: (value) async {
+                preferredSpeed = value;
+                await command('speed', {'value': value});
               },
             ),
-          )
-          .toList(),
-    ),
-  );
+            Wrap(
+              spacing: 8,
+              children: [0.5, 1.0, 1.5, 2.0, 3.0, 4.0]
+                  .map(
+                    (value) => ActionChip(
+                      label: Text('$value×'),
+                      onPressed: () async {
+                        update(() => selected = value);
+                        preferredSpeed = value;
+                        await command('speed', {'value': value});
+                      },
+                    ),
+                  )
+                  .toList(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   void qualitySheet() {
     final items = (state['qualities'] as List? ?? [])
         .cast<num>()
@@ -1419,6 +1506,13 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
               .toList(),
         ),
         const SizedBox(height: 8),
+        ActionChip(
+          label: const Text('Hết video này'),
+          onPressed: () async {
+            await command('timer', {'milliseconds': -1});
+            if (mounted) Navigator.pop(context);
+          },
+        ),
         Row(
           children: [
             TextButton(
@@ -1508,6 +1602,19 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
           title: const Text('Âm thanh tốt nhất từ nguồn'),
           subtitle: Text(
             '${state['audio'] ?? 'Đang tải'} · ${((state['audioBitrate'] as num? ?? 0) / 1000).round()} kbps',
+          ),
+        ),
+        ListTile(
+          leading: const Icon(Icons.headphones),
+          title: const Text('Chỉ nghe âm thanh'),
+          subtitle: const Text('Tiết kiệm dữ liệu khi nguồn có âm thanh riêng'),
+          trailing: Switch(
+            value: state['audioOnly'] == true,
+            onChanged: (value) async {
+              Navigator.pop(context);
+              await command('audioOnly', {'enabled': value});
+              await poll();
+            },
           ),
         ),
         ListTile(
@@ -1677,6 +1784,184 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     onSettings: playbackOptions,
   );
 
+  Future<void> offlineLibrary() async {
+    if (!mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => StatefulBuilder(
+        builder: (context, update) {
+          return FutureBuilder<List<dynamic>>(
+            future: player
+                .invokeListMethod<dynamic>('offlineList')
+                .then((value) => value ?? []),
+            builder: (context, snapshot) {
+              final items = snapshot.data ?? [];
+              return SafeArea(
+                child: SizedBox(
+                  height: MediaQuery.sizeOf(context).height * .7,
+                  child: Column(
+                    children: [
+                      ListTile(
+                        title: const Text('Video đã tải'),
+                        subtitle: FutureBuilder<Map<String, dynamic>?>(
+                          future: player.invokeMapMethod<String, dynamic>(
+                            'offlineStatus',
+                          ),
+                          builder: (context, snapshot) {
+                            final data = snapshot.data;
+                            if (data == null ||
+                                (data['message'] as String? ?? '').isEmpty) {
+                              return const Text(
+                                'Giới hạn 200 MiB · chỉ mạng không tính dung lượng',
+                              );
+                            }
+                            return Text(
+                              '${data['message']} · ${((data['bytes'] as num? ?? 0) / 1048576).toStringAsFixed(1)} MiB · nhấn làm mới',
+                            );
+                          },
+                        ),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.refresh),
+                          onPressed: () => update(() {}),
+                        ),
+                      ),
+                      Expanded(
+                        child: items.isEmpty
+                            ? const Center(
+                                child: Text('Chưa có bản tải hoàn tất'),
+                              )
+                            : ListView.builder(
+                                itemCount: items.length,
+                                itemBuilder: (context, index) {
+                                  final item = Map<String, dynamic>.from(
+                                    items[index] as Map,
+                                  );
+                                  return ListTile(
+                                    title: Text('${item['title']}'),
+                                    subtitle: Text(
+                                      '${item['audioOnly'] == true ? 'Âm thanh' : 'Video'} · ${((item['size'] as num? ?? 0) / 1048576).toStringAsFixed(1)} MiB',
+                                    ),
+                                    onTap: () async {
+                                      Navigator.pop(context);
+                                      try {
+                                        final data = Map<String, dynamic>.from(
+                                          (await player
+                                              .invokeMapMethod<String, dynamic>(
+                                                'offlineData',
+                                                {'id': item['id']},
+                                              ))!,
+                                        );
+                                        await persistProgress();
+                                        await player.invokeMethod('load', {
+                                          'id': data['id'],
+                                          'title': data['title'],
+                                          'author': data['author'],
+                                          'tracks': data['tracks'],
+                                          'position': 0,
+                                          'metadata': data,
+                                        });
+                                        if (!mounted) return;
+                                        setState(() {
+                                          active = data;
+                                          watch = true;
+                                          state = {};
+                                          resolving = false;
+                                          error = null;
+                                        });
+                                        showControls();
+                                        await poll();
+                                      } on PlatformException catch (e) {
+                                        toast(
+                                          e.message ?? 'Không mở được bản tải',
+                                        );
+                                      }
+                                    },
+                                    trailing: IconButton(
+                                      tooltip: 'Xóa bản tải',
+                                      icon: const Icon(Icons.delete_outline),
+                                      onPressed: () async {
+                                        try {
+                                          await player.invokeMethod(
+                                            'offlineDelete',
+                                            {'id': item['id']},
+                                          );
+                                          update(() {});
+                                        } on PlatformException catch (e) {
+                                          toast(e.message ?? 'Không xóa được');
+                                        }
+                                      },
+                                    ),
+                                  );
+                                },
+                              ),
+                      ),
+                      TextButton(
+                        onPressed: () async {
+                          await player.invokeMethod('offlineCancel');
+                          if (context.mounted) update(() {});
+                        },
+                        child: const Text('Hủy lượt tải đang chạy'),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> startOfflineDownload(bool audioOnly) async {
+    try {
+      await player.invokeMethod('offlineStart', {'audioOnly': audioOnly});
+      if (mounted) toast('Đang tải qua Wi-Fi. Mở Video đã tải để kiểm tra.');
+    } on PlatformException catch (e) {
+      if (mounted) toast(e.message ?? 'Không tải được');
+    }
+  }
+
+  void offlineOptions() => sheet(
+    'Tải offline',
+    Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const ListTile(
+          title: Text('Tải qua mạng không tính dung lượng'),
+          subtitle: Text(
+            'Tối đa 200 MiB cho toàn bộ bản tải. Giữ ứng dụng mở trong khi tải.',
+          ),
+        ),
+        ListTile(
+          leading: const Icon(Icons.headphones),
+          title: const Text('Chỉ tải âm thanh'),
+          onTap: () {
+            Navigator.pop(context);
+            startOfflineDownload(true);
+          },
+        ),
+        ListTile(
+          leading: const Icon(Icons.download),
+          title: const Text('Tải video (tối đa 360p nếu có)'),
+          onTap: () {
+            Navigator.pop(context);
+            startOfflineDownload(false);
+          },
+        ),
+        ListTile(
+          leading: const Icon(Icons.folder_open),
+          title: const Text('Video đã tải'),
+          onTap: () {
+            Navigator.pop(context);
+            offlineLibrary();
+          },
+        ),
+      ],
+    ),
+  );
+
   Widget playerControls() {
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -1687,6 +1972,28 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
           child: Row(
             spacing: 8,
             children: [
+              ActionChip(
+                avatar: const Icon(Icons.download, size: 18),
+                label: const Text('Tải offline'),
+                onPressed: offlineOptions,
+              ),
+              ActionChip(
+                avatar: Icon(
+                  state['audioOnly'] == true
+                      ? Icons.videocam
+                      : Icons.headphones,
+                  size: 18,
+                ),
+                label: Text(
+                  state['audioOnly'] == true ? 'Xem video' : 'Chỉ nghe',
+                ),
+                onPressed: () async {
+                  await command('audioOnly', {
+                    'enabled': state['audioOnly'] != true,
+                  });
+                  await poll();
+                },
+              ),
               ActionChip(
                 avatar: const Icon(Icons.speed, size: 18),
                 label: Text('${state['speed'] ?? preferredSpeed}×'),
@@ -1701,6 +2008,11 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
                       : '${quality}p',
                 ),
                 onPressed: qualitySheet,
+              ),
+              ActionChip(
+                avatar: const Icon(Icons.list_alt, size: 18),
+                label: const Text('Chương'),
+                onPressed: chaptersSheet,
               ),
               ActionChip(
                 avatar: const Icon(Icons.bedtime_outlined, size: 18),
@@ -1753,6 +2065,63 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         playerControls(),
+        if (state['audioOnly'] == true)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Column(
+              children: [
+                const Text(
+                  'Chế độ nghe',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    IconButton(
+                      iconSize: 36,
+                      tooltip: 'Lùi 10 giây',
+                      onPressed: () => command('seek', {
+                        'position':
+                            ((state['position'] as num? ?? 0).toInt() - 10000)
+                                .clamp(0, 1 << 53),
+                      }),
+                      icon: const Icon(Icons.replay_10),
+                    ),
+                    IconButton(
+                      iconSize: 52,
+                      tooltip: state['playing'] == true ? 'Tạm dừng' : 'Phát',
+                      onPressed: () =>
+                          command(state['playing'] == true ? 'pause' : 'play'),
+                      icon: Icon(
+                        state['playing'] == true
+                            ? Icons.pause_circle
+                            : Icons.play_circle,
+                      ),
+                    ),
+                    IconButton(
+                      iconSize: 36,
+                      tooltip: 'Tiến 10 giây',
+                      onPressed: () => command('seek', {
+                        'position':
+                            ((state['position'] as num? ?? 0).toInt() + 10000)
+                                .clamp(
+                                  0,
+                                  (state['duration'] as num? ?? 0).toInt(),
+                                ),
+                      }),
+                      icon: const Icon(Icons.forward_10),
+                    ),
+                    IconButton(
+                      iconSize: 32,
+                      tooltip: 'Hàng đợi',
+                      onPressed: showQueue,
+                      icon: const Icon(Icons.queue_music),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
         if (state['timerExpired'] == true)
           const Padding(
             padding: EdgeInsets.all(16),
@@ -1879,7 +2248,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
                 child: RelatedPanel(
                   seed: v,
                   header: detail,
-                  hidden: profile.hidden,
+                  hidden: {...profile.hidden, ...profile.finished},
                   itemBuilder: queuedRow,
                 ),
               ),
@@ -1893,7 +2262,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
               child: RelatedPanel(
                 seed: v,
                 header: detail,
-                hidden: profile.hidden,
+                hidden: {...profile.hidden, ...profile.finished},
                 itemBuilder: queuedRow,
               ),
             ),
@@ -1914,6 +2283,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     children: [
       Image.network(
         v['thumbnail'] ?? 'https://i.ytimg.com/vi/${v['id']}/hqdefault.jpg',
+        cacheWidth: 480,
         fit: BoxFit.cover,
         errorBuilder: (_, e, s) => const ColoredBox(
           color: panel,
@@ -2384,7 +2754,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
   }
 
   Future<void> cacheSettings() async {
-    final selected = prefs?.getInt('mediaCacheMb') ?? 256;
+    final selected = prefs?.getInt('mediaCacheMb') ?? 64;
     final value = await showModalBottomSheet<int>(
       context: context,
       builder: (context) => SafeArea(
@@ -2393,9 +2763,11 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
           children: [
             const ListTile(
               title: Text('Dung lượng bộ đệm video'),
-              subtitle: Text('Áp dụng khi mở lại ứng dụng.'),
+              subtitle: Text(
+                'Lưu trên bộ nhớ máy, áp dụng khi mở lại ứng dụng.',
+              ),
             ),
-            for (final size in [128, 256, 512])
+            for (final size in [64, 128, 256, 512])
               ListTile(
                 title: Text('$size MiB'),
                 trailing: size == selected ? const Icon(Icons.check) : null,
@@ -2423,6 +2795,45 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     }
   }
 
+  bool checkingUpdate = false;
+  Map<String, dynamic>? updateCandidate;
+
+  Future<void> updateApp() async {
+    const updater = MethodChannel('ytb/update');
+    if (checkingUpdate) return;
+    if (updateCandidate != null) {
+      try {
+        final outcome = await updater.invokeMethod<String>('install');
+        if (outcome == 'permission' && mounted) {
+          toast('Cho phép cài ứng dụng, quay lại và bấm Cài cập nhật.');
+        }
+      } on PlatformException catch (e) {
+        if (mounted) toast(e.message ?? 'Không mở được trình cài đặt');
+      }
+      return;
+    }
+    setState(() => checkingUpdate = true);
+    try {
+      final info = await updater.invokeMapMethod<String, dynamic>('check');
+      if (!mounted) return;
+      setState(
+        () => updateCandidate = info?['available'] == true ? info : null,
+      );
+      if (updateCandidate == null) {
+        toast('Bạn đang dùng bản mới nhất (${info?['current'] ?? ''}).');
+      } else {
+        final outcome = await updater.invokeMethod<String>('install');
+        if (outcome == 'permission' && mounted) {
+          toast('Cho phép cài ứng dụng, quay lại và bấm Cài cập nhật.');
+        }
+      }
+    } on PlatformException catch (e) {
+      if (mounted) toast(e.message ?? 'Không kiểm tra được cập nhật');
+    } finally {
+      if (mounted) setState(() => checkingUpdate = false);
+    }
+  }
+
   Widget settings() => ListView(
     padding: const EdgeInsets.all(20),
     children: [
@@ -2431,6 +2842,29 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
         style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
       ),
       const SizedBox(height: 24),
+      ListTile(
+        contentPadding: EdgeInsets.zero,
+        leading: checkingUpdate
+            ? const SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : const Icon(Icons.system_update),
+        title: Text(
+          updateCandidate == null
+              ? 'Kiểm tra cập nhật'
+              : 'Cài cập nhật ${updateCandidate!['version']}',
+        ),
+        subtitle: Text(
+          checkingUpdate
+              ? 'Đang tải và xác minh bản phát hành...'
+              : updateCandidate == null
+              ? 'Tải bản phát hành GitHub mới nhất'
+              : 'Android sẽ hỏi xác nhận cài đặt',
+        ),
+        onTap: checkingUpdate ? null : updateApp,
+      ),
       SwitchListTile(
         contentPadding: EdgeInsets.zero,
         title: const Text('Đề xuất theo thói quen xem'),
@@ -2455,7 +2889,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
         onTap: clearViewingData,
       ),
       const Text(
-        'Sở thích không được gửi tới máy chủ riêng. YouTube vẫn nhận các yêu cầu tìm kiếm và phát video. Chỉ chuẩn bị trước media trên mạng không tính dung lượng.',
+        'Sở thích không được gửi tới máy chủ riêng. Chất lượng tự động tiết kiệm dữ liệu: tối đa 360p trên mạng tính dung lượng và 480p trên mạng không tính dung lượng khi có nguồn phù hợp. Bạn có thể chọn chất lượng khác trong trình phát. Media chỉ được tải trước trên mạng không tính dung lượng.',
         style: TextStyle(color: muted, fontSize: 12, height: 1.5),
       ),
       ListTile(
@@ -2463,7 +2897,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
         leading: const Icon(Icons.storage),
         title: const Text('Dung lượng bộ đệm video'),
         subtitle: Text(
-          '${prefs?.getInt('mediaCacheMb') ?? 256} MiB · áp dụng khi mở lại',
+          '${prefs?.getInt('mediaCacheMb') ?? 64} MiB trên máy · áp dụng khi mở lại',
         ),
         onTap: cacheSettings,
       ),
@@ -2473,6 +2907,11 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
         title: const Text('Xóa bộ đệm video'),
         subtitle: const Text('Giữ lịch sử, vị trí xem và danh sách lưu'),
         onTap: clearMediaCache,
+      ),
+      ListTile(
+        leading: const Icon(Icons.download_done),
+        title: const Text('Video đã tải'),
+        onTap: offlineLibrary,
       ),
       const SizedBox(height: 20),
       ListTile(

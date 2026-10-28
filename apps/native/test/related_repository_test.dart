@@ -3,6 +3,28 @@ import 'package:ytb/related_repository.dart';
 
 void main() {
   test(
+    'A small first batch is returned before requesting its continuation',
+    () async {
+      var calls = 0;
+      final repo = RelatedRepository(
+        {'id': 'current'},
+        request: (method, args) async {
+          calls++;
+          return {
+            'videos': [
+              {'id': 'next'},
+            ],
+            'continuation': 'more',
+          };
+        },
+      );
+      final page = await repo.next();
+      expect(page.videos.single['id'], 'next');
+      expect(page.hasMore, true);
+      expect(calls, 1);
+    },
+  );
+  test(
     'related pages deduplicate, exclude current video and use server cursors',
     () async {
       final calls = <Map>[];
