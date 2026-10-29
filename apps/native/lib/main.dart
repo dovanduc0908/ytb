@@ -68,6 +68,13 @@ String? videoId(String input) {
   return id != null && RegExp(r'^[\w-]{11}$').hasMatch(id) ? id : null;
 }
 
+bool isFacebookLink(String input) {
+  final uri = Uri.tryParse(input.trim());
+  if (uri == null || uri.scheme != 'https' || uri.userInfo.isNotEmpty || uri.hasPort) return false;
+  final host = uri.host.toLowerCase();
+  return host == 'fb.watch' || host == 'facebook.com' || host.endsWith('.facebook.com');
+}
+
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   PaintingBinding.instance.imageCache.maximumSizeBytes = 16 * 1024 * 1024;
@@ -911,6 +918,8 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
             .invokeMethod(
               path.startsWith('/search')
                   ? 'search'
+                  : path == '/resolveFacebook'
+                  ? 'resolveFacebook'
                   : path == '/resolveFull'
                   ? 'resolveFull'
                   : 'resolve',
@@ -936,6 +945,10 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     final id = videoId(q);
     if (id != null) {
       await open({'id': id, 'title': 'Đang lấy thông tin video', 'author': ''});
+      return;
+    }
+    if (isFacebookLink(q)) {
+      await open({'id': q, 'title': 'Đang lấy thông tin video', 'author': ''});
       return;
     }
     if (newQuery && profile.enabled) {
@@ -1036,8 +1049,8 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
         tvConnected
             ? Future.value(Map<String, dynamic>.from(v))
             : api(
-                forceFull ? '/resolveFull' : '/resolve',
-                body: {'id': v['id']},
+                isFacebookLink('${v['id']}') ? '/resolveFacebook' : forceFull ? '/resolveFull' : '/resolve',
+                body: isFacebookLink('${v['id']}') ? {'url': v['id']} : {'id': v['id']},
               ),
         command('pause'),
         if (!tvConnected)

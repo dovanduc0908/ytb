@@ -210,7 +210,7 @@ class _VideoSearchBoxState extends State<VideoSearchBox> {
             onTapOutside: (_) => focus.unfocus(),
             decoration: InputDecoration(
               counterText: '',
-              hintText: 'Tìm video hoặc dán link YouTube',
+              hintText: 'Tìm video hoặc dán link YouTube, Facebook',
               prefixIcon: const Icon(Icons.search),
               suffixIcon: Row(
                 mainAxisSize: MainAxisSize.min,
