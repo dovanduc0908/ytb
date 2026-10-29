@@ -78,7 +78,7 @@ class OnDeviceSource(private val context: Context) : MethodChannel.MethodCallHan
             }
             result.success(null); return
         }
-        if (call.method !in listOf("search", "charts", "discover", "related", "shorts", "channel", "suggest", "resolve", "resolveFull")) { result.notImplemented(); return }
+        if (call.method !in listOf("search", "charts", "discover", "related", "shorts", "channel", "suggest", "resolve", "resolveFull", "resolveFacebook")) { result.notImplemented(); return }
         val generation = if (call.method == "suggest") suggestionGeneration.incrementAndGet() else 0
         val executor = when (call.method) { "related" -> relatedWorkers; "charts", "discover", "shorts", "channel" -> discoveryWorkers; "search" -> searchWorkers; "suggest" -> suggestWorkers; else -> workers }
         executor.execute {
@@ -93,6 +93,7 @@ class OnDeviceSource(private val context: Context) : MethodChannel.MethodCallHan
                     "suggest" -> if (generation == suggestionGeneration.get()) quickSearch.suggest(call.argument<String>("query") ?: "")
                                  else mapOf("suggestions" to emptyList<String>())
                     "resolveFull" -> { init(); resolveFull(call.argument<String>("id") ?: "") }
+                    "resolveFacebook" -> { init(); resolveFacebook(call.argument<String>("url") ?: "") }
                     else -> resolve(call.argument<String>("id") ?: "")
                 }
                 Log.i("YTBSource", "${call.method} OK ${SystemClock.elapsedRealtime()-started}ms on-device cache=${data["cacheHit"] == true}")
@@ -101,6 +102,7 @@ class OnDeviceSource(private val context: Context) : MethodChannel.MethodCallHan
                 // Never log signed stream URLs or cookies.
                 Log.e("YTBSource", "${call.method} failed ${e.javaClass.simpleName}: ${e.message?.take(100)?.substringBefore("https:")}")
                 val message = if (e is IllegalArgumentException) e.message ?: "Thông tin video không hợp lệ."
+                    else if (call.method == "resolveFacebook") "Không mở được video Facebook. Video cần công khai và có nguồn phát được hỗ trợ."
                     else "Chưa lấy được nguồn từ YouTube. Kiểm tra Internet hoặc thử video khác."
                 main.post { result.error("SOURCE", message, null) }
             }
@@ -188,6 +190,26 @@ class OnDeviceSource(private val context: Context) : MethodChannel.MethodCallHan
         val result=card(data)+mapOf("tracks" to tracks, "onDevice" to true, "engine" to "extractor", "extendedQualities" to true)
         synchronized(cache) { cache[id]=Pair(SystemClock.elapsedRealtime()+sourceTtl(result),result) }
         return result
+    }
+    private fun resolveFacebook(url: String): Map<String, Any?> {
+        val uri = try { URI(url) } catch (_: Exception) { throw IllegalArgumentException("Liên kết không hợp lệ.") }
+        val host = uri.host?.lowercase() ?: ""
+        require(uri.scheme == "https" && uri.userInfo == null && uri.port == -1 &&
+            (host == "fb.watch" || host == "facebook.com" || host.endsWith(".facebook.com"))) { "Hãy dùng liên kết HTTPS của Facebook." }
+        val data = execute(url)
+        val formats = data.optJSONArray("formats") ?: JSONArray()
+        val videos = (0 until formats.length()).mapNotNull { formats.optJSONObject(it) }.filter {
+            val stream = runCatching { URI(it.optString("url")) }.getOrNull()
+            val streamHost = stream?.host?.lowercase() ?: ""
+            stream?.scheme == "https" && (streamHost == "fbcdn.net" || streamHost.endsWith(".fbcdn.net") || streamHost.endsWith(".facebook.com")) &&
+                !it.optBoolean("has_drm", false) && it.optString("protocol") == "https" &&
+                it.optString("vcodec") != "none" && it.optString("acodec") != "none" && it.optString("ext") == "mp4"
+        }.sortedBy { it.optInt("height") }
+        require(videos.isNotEmpty()) { "Video chưa có nguồn MP4 công khai tương thích." }
+        val tracks = videos.map { v -> mapOf("height" to v.optInt("height", 360).coerceAtLeast(1),
+            "bitrate" to (v.optDouble("tbr", 0.0) * 1000).toInt(), "url" to v.optString("url"),
+            "mime" to "video/mp4", "headers" to headers(v), "audioGain" to 1.0) }
+        return card(data) + mapOf("id" to url, "tracks" to tracks, "onDevice" to true, "engine" to "facebook")
     }
     private fun safeUrl(raw: String): Boolean = try {
         val u=URI(raw);u.scheme=="https" && (u.host.endsWith(".googlevideo.com") || u.host.endsWith(".youtube.com"))
