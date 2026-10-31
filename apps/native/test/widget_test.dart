@@ -16,9 +16,9 @@ void main() {
     expect(videoId('nhạc thư giãn'), isNull);
   });
   test('Speed selector covers the complete requested range', () {
-    expect(speeds.length, 14);
+    expect(speeds.length, 16);
     expect(speeds.first, .25);
-    expect(speeds.last, 3.5);
+    expect(speeds.last, 4.0);
     for (var i = 1; i < speeds.length; i++) {
       expect(speeds[i] - speeds[i - 1], 0.25);
     }

@@ -132,7 +132,7 @@ void main() {
       await tester.dragFrom(const Offset(450, 390), const Offset(0, -430));
       await tester.pump();
       expect(rates, isNotEmpty);
-      expect(rates.last, 3.5);
+      expect(rates.last, 3.75);
       expect(find.byKey(const Key('adjustment-speed')), findsOneWidget);
       await tester.dragFrom(const Offset(450, 390), const Offset(0, 300));
       await tester.pump();
