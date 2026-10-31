@@ -73,8 +73,9 @@ bool isFacebookLink(String input) {
   if (uri == null ||
       uri.scheme != 'https' ||
       uri.userInfo.isNotEmpty ||
-      uri.hasPort)
+      uri.hasPort) {
     return false;
+  }
   final host = uri.host.toLowerCase();
   return host == 'fb.watch' ||
       host == 'facebook.com' ||
@@ -1198,8 +1199,9 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
         }
         setState(() {
           state = d;
-          if (!changingFull && d['orientationLocked'] is bool)
+          if (!changingFull && d['orientationLocked'] is bool) {
             screenLocked = d['orientationLocked'] == true;
+          }
           if (!resolving &&
               d['id'] != null &&
               d['id'] != '' &&
