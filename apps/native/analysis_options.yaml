@@ -13,6 +13,8 @@ analyzer:
   exclude:
     - build/**
     - android/**
+    # Historical tests for the removed pre-0.10 YouTube implementation.
+    - legacy_integration_test/**
 
 linter:
   # The lint rules applied to this project can be customized in the
