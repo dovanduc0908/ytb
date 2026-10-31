@@ -24,6 +24,8 @@ class PlayerOverlay extends StatefulWidget {
     this.onSpeed,
     this.onAdjust,
     this.onLock,
+    this.onRotate,
+    this.locked,
   });
   final Widget video;
   final bool visible, fullscreen, loading;
@@ -37,6 +39,8 @@ class PlayerOverlay extends StatefulWidget {
   final ValueChanged<double>? onSpeed;
   final Future<double> Function(String, double)? onAdjust;
   final ValueChanged<bool>? onLock;
+  final VoidCallback? onRotate;
+  final bool? locked;
   @override
   State<PlayerOverlay> createState() => _PlayerOverlayState();
 }
@@ -53,7 +57,9 @@ class _PlayerOverlayState extends State<PlayerOverlay> {
   VoidCallback get onFullscreen => widget.onFullscreen;
   VoidCallback get onSettings => widget.onSettings;
   String Function(num) get formatTime => widget.formatTime;
-  bool locked = false, lockButtonVisible = false, pinching = false;
+  bool localLocked = false;
+  bool get locked => widget.locked ?? localLocked;
+  bool lockButtonVisible = false, pinching = false;
   double zoom = 1, startZoom = 1, rate = 1, dragDown = 0;
   Offset pan = Offset.zero, startPan = Offset.zero, origin = Offset.zero;
   String? mode, feedback;
@@ -208,7 +214,7 @@ class _PlayerOverlayState extends State<PlayerOverlay> {
                   final next =
                       ((rate - delta.dy / box.maxHeight * 3.25) * 4).round() /
                       4;
-                  final value = next.clamp(.25, 3.5).toDouble();
+                  final value = next.clamp(.25, 4.0).toDouble();
                   widget.onSpeed?.call(value);
                   showMeter('speed', value);
                 } else if (mode == 'volume' || mode == 'brightness') {
@@ -364,6 +370,15 @@ class _PlayerOverlayState extends State<PlayerOverlay> {
                                 ),
                               ),
                             const Spacer(),
+                            if (fullscreen && widget.onRotate != null)
+                              IconButton(
+                                tooltip: 'Xoay ngang/dọc',
+                                onPressed: widget.onRotate,
+                                icon: const Icon(
+                                  Icons.screen_rotation,
+                                  color: Colors.white,
+                                ),
+                              ),
                             if (fullscreen)
                               IconButton(
                                 tooltip: 'Khóa màn hình',
@@ -373,13 +388,13 @@ class _PlayerOverlayState extends State<PlayerOverlay> {
                                   meterTimer?.cancel();
                                   meterGeneration++;
                                   setState(() {
-                                    locked = true;
                                     lockButtonVisible = false;
                                     feedback = null;
                                     meterKind = null;
                                     seekTarget = null;
                                     sliderPreview = null;
                                   });
+                                  localLocked = true;
                                   widget.onLock?.call(true);
                                 },
                                 icon: const Icon(
@@ -674,9 +689,9 @@ class _PlayerOverlayState extends State<PlayerOverlay> {
                     onPressed: () {
                       lockTimer?.cancel();
                       setState(() {
-                        locked = false;
                         lockButtonVisible = false;
                       });
+                      localLocked = false;
                       widget.onLock?.call(false);
                     },
                     icon: const Icon(Icons.lock),

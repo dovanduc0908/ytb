@@ -70,9 +70,25 @@ String? videoId(String input) {
 
 bool isFacebookLink(String input) {
   final uri = Uri.tryParse(input.trim());
-  if (uri == null || uri.scheme != 'https' || uri.userInfo.isNotEmpty || uri.hasPort) return false;
+  if (uri == null ||
+      uri.scheme != 'https' ||
+      uri.userInfo.isNotEmpty ||
+      uri.hasPort)
+    return false;
   final host = uri.host.toLowerCase();
-  return host == 'fb.watch' || host == 'facebook.com' || host.endsWith('.facebook.com');
+  return host == 'fb.watch' ||
+      host == 'facebook.com' ||
+      host.endsWith('.facebook.com');
+}
+
+String canonicalMediaId(String raw) {
+  if (!isFacebookLink(raw)) return raw;
+  final uri = Uri.parse(raw);
+  final match = RegExp(r'(?:reel|videos)/(\d+)').firstMatch(uri.path);
+  final id = match?.group(1) ?? uri.queryParameters['v'];
+  return id != null && RegExp(r'^\d+$').hasMatch(id)
+      ? 'https://www.facebook.com/watch/?v=$id'
+      : raw;
 }
 
 void main() {
@@ -540,7 +556,9 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
         : width >= 550
         ? 2
         : 1;
-    final rowHeight = width / columns * 9 / 16 + 110;
+    final rowHeight =
+        width / columns * 9 / 16 +
+        140 * MediaQuery.textScalerOf(context).scale(1);
     final index =
         (((feedScroll.offset - 220).clamp(0, double.infinity) / rowHeight)
                     .floor() *
@@ -776,6 +794,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     player.setMethodCallHandler((call) async {
       if (call.method == 'pipChanged' && mounted) {
         setState(() => inPip = call.arguments == true);
+        if (!inPip) unawaited(poll());
       }
     });
     init();
@@ -788,6 +807,16 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
       playlists = (jsonDecode(prefs?.getString('playlists') ?? '[]') as List)
           .map((v) => Map<String, dynamic>.from(v))
           .toList();
+      for (final list in playlists) {
+        list['items'] = (list['items'] as List? ?? [])
+            .map(
+              (v) => {
+                ...Map<String, dynamic>.from(v),
+                'id': canonicalMediaId('${v['id']}'),
+              },
+            )
+            .toList();
+      }
     } catch (_) {}
     try {
       shortsProfile = RecommendationProfile.fromJson(
@@ -810,7 +839,12 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     for (final key in ['history', 'saved']) {
       try {
         final data = (jsonDecode(prefs!.getString(key) ?? '[]') as List)
-            .map((e) => Map<String, dynamic>.from(e))
+            .map(
+              (e) => {
+                ...Map<String, dynamic>.from(e),
+                'id': canonicalMediaId('${e['id']}'),
+              },
+            )
             .toList();
         if (key == 'history') {
           for (final video in data) {
@@ -843,6 +877,9 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
         } else {
           saved = data;
         }
+        final seen = <String>{};
+        data.removeWhere((v) => !seen.add('${v['id']}'));
+        await prefs!.setString(key, jsonEncode(data));
       } catch (_) {}
     }
     try {
@@ -1020,6 +1057,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     bool fromStart = false,
     bool asShort = false,
   }) async {
+    v = {...v, 'id': canonicalMediaId('${v['id']}')};
     final seq = ++loadGeneration;
     unawaited(source.invokeMethod<void>('cancelPrefetch').catchError((_) {}));
     await persistProgress();
@@ -1049,8 +1087,14 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
         tvConnected
             ? Future.value(Map<String, dynamic>.from(v))
             : api(
-                isFacebookLink('${v['id']}') ? '/resolveFacebook' : forceFull ? '/resolveFull' : '/resolve',
-                body: isFacebookLink('${v['id']}') ? {'url': v['id']} : {'id': v['id']},
+                isFacebookLink('${v['id']}')
+                    ? '/resolveFacebook'
+                    : forceFull
+                    ? '/resolveFull'
+                    : '/resolve',
+                body: isFacebookLink('${v['id']}')
+                    ? {'url': v['id']}
+                    : {'id': v['id']},
               ),
         command('pause'),
         if (!tvConnected)
@@ -1084,11 +1128,11 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
       await command('speed', {'value': preferredSpeed});
       if (!mounted || seq != loadGeneration) return;
       showControls();
-      loadedId = v['id'];
+      loadedId = data['id'];
       data.remove('tracks');
       active = {...data, 'isShort': asShort};
       quality = 0;
-      history.removeWhere((x) => x['id'] == v['id']);
+      history.removeWhere((x) => canonicalMediaId('${x['id']}') == data['id']);
       history.insert(0, {...data, 'position': fromStart ? 0 : resume});
       if (history.length > 150) history.removeLast();
       await prefs?.setString('history', jsonEncode(history));
@@ -1154,6 +1198,8 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
         }
         setState(() {
           state = d;
+          if (!changingFull && d['orientationLocked'] is bool)
+            screenLocked = d['orientationLocked'] == true;
           if (!resolving &&
               d['id'] != null &&
               d['id'] != '' &&
@@ -1327,7 +1373,8 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
             'Chỉ hiển thị các mức nguồn và máy hỗ trợ.',
             style: TextStyle(color: muted),
           ),
-          if (active?['extendedQualities'] != true)
+          if (active?['extendedQualities'] != true &&
+              !isFacebookLink('${active?['id']}'))
             TextButton.icon(
               icon: const Icon(Icons.hd_outlined),
               label: Text(
@@ -1375,7 +1422,11 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
                 .map(
                   (h) => ChoiceChip(
                     label: Text(
-                      h == 0 ? 'Tự động · ${state['height'] ?? '…'}p' : '${h}p',
+                      h == 0
+                          ? 'Tự động · ${state['height'] ?? '…'}p'
+                          : h == 1
+                          ? 'Nguồn tốt nhất'
+                          : '${h}p',
                     ),
                     selected:
                         (state['qualityMode'] as num?)?.toInt() == h ||
@@ -1585,13 +1636,20 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
   Future<void> toggleFull() async {
     if (changingFull || screenLocked) return;
     changingFull = true;
-    setState(() => full = !full);
+    final next = !full;
     showControls();
     try {
-      await player.invokeMethod('fullscreen', {'enabled': full});
+      await player.invokeMethod('fullscreen', {'enabled': next});
+      if (!mounted) return;
+      setState(() {
+        full = next;
+        screenLocked = false;
+      });
       await SystemChrome.setEnabledSystemUIMode(
         full ? SystemUiMode.immersiveSticky : SystemUiMode.edgeToEdge,
       );
+    } on PlatformException catch (e) {
+      toast(e.message ?? 'Chưa đổi được toàn màn hình');
     } finally {
       changingFull = false;
     }
@@ -1605,11 +1663,88 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     });
   }
 
+  void enhancementSheet() => sheet(
+    'Tăng cường hình ảnh',
+    Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Text(
+          'Phóng hình Lanczos và tăng nét nhẹ. Tự giảm xử lý khi máy nóng hoặc phát không mượt. Không tạo lại chi tiết đã mất.',
+        ),
+        for (final entry in {
+          'off': 'Tắt',
+          'auto': 'Tự động',
+          'strong': 'Mạnh',
+        }.entries)
+          ListTile(
+            title: Text(entry.value),
+            trailing: state['enhancement'] == entry.key
+                ? const Icon(Icons.check)
+                : null,
+            onTap: () async {
+              await command('enhancement', {'mode': entry.key});
+              if (mounted) Navigator.pop(context);
+              await poll();
+            },
+          ),
+      ],
+    ),
+  );
+
   void playbackOptions() => sheet(
     'Tùy chọn phát',
     Column(
       mainAxisSize: MainAxisSize.min,
       children: [
+        if (full && !tvConnected)
+          ListTile(
+            leading: const Icon(Icons.screen_rotation),
+            title: const Text('Hướng toàn màn hình'),
+            subtitle: Text(
+              {
+                    'auto': 'Theo video',
+                    'landscape': 'Ngang',
+                    'portrait': 'Dọc',
+                  }[state['orientationMode']] ??
+                  'Ngang',
+            ),
+            onTap: () {
+              Navigator.pop(context);
+              sheet(
+                'Hướng toàn màn hình',
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    for (final entry in {
+                      'auto': 'Theo video',
+                      'landscape': 'Ngang',
+                      'portrait': 'Dọc',
+                    }.entries)
+                      ListTile(
+                        title: Text(entry.value),
+                        onTap: () async {
+                          await command('orientation', {'mode': entry.key});
+                          if (mounted) Navigator.pop(context);
+                          await poll();
+                        },
+                      ),
+                  ],
+                ),
+              );
+            },
+          ),
+        if (!tvConnected)
+          ListTile(
+            leading: const Icon(Icons.auto_fix_high),
+            title: const Text('Tăng cường hình ảnh'),
+            subtitle: Text(
+              '${state['enhancementStatus'] ?? 'off'} · Giữ nguyên độ phân giải nguồn',
+            ),
+            onTap: () {
+              Navigator.pop(context);
+              enhancementSheet();
+            },
+          ),
         ListTile(
           leading: const Icon(Icons.graphic_eq),
           title: const Text('Âm thanh tốt nhất từ nguồn'),
@@ -1680,7 +1815,11 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
               final seconds =
                   ((state['position'] as num?)?.toInt() ?? 0) ~/ 1000;
               Clipboard.setData(
-                ClipboardData(text: 'https://youtu.be/$id?t=$seconds'),
+                ClipboardData(
+                  text: isFacebookLink('$id')
+                      ? '$id'
+                      : 'https://youtu.be/$id?t=$seconds',
+                ),
               );
               Navigator.pop(context);
               toast('Đã sao chép liên kết kèm thời điểm');
@@ -1746,7 +1885,18 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
           ),
         );
 
+  double get videoAspect =>
+      ((state['aspectRatio'] as num?)?.toDouble() ?? 16 / 9).clamp(.3, 3.0);
   Widget videoFrame() => PlayerOverlay(
+    locked: screenLocked,
+    onRotate: () async {
+      final mode = state['orientationMode'] == 'portrait'
+          ? 'landscape'
+          : 'portrait';
+      await command('orientation', {'mode': mode});
+      await poll();
+      showControls();
+    },
     video: videoSurface(),
     onMinimize: backToBrowse,
     onPrevious: () {
@@ -1957,7 +2107,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
         ),
         ListTile(
           leading: const Icon(Icons.download),
-          title: const Text('Tải video (tối đa 360p nếu có)'),
+          title: const Text('Tải video (ưu tiên tối đa 480p)'),
           onTap: () {
             Navigator.pop(context);
             startOfflineDownload(false);
@@ -2162,7 +2312,9 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
             children: [
               Text(viewsLabel(v), style: const TextStyle(color: muted)),
               TextButton.icon(
-                onPressed: () => openChannel(v),
+                onPressed: isFacebookLink('${v['id']}')
+                    ? null
+                    : () => openChannel(v),
                 icon: const Icon(Icons.account_circle_outlined),
                 label: Text(v['author'] ?? 'Mở kênh người đăng'),
               ),
@@ -2185,7 +2337,11 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
               TextButton.icon(
                 onPressed: () {
                   Clipboard.setData(
-                    ClipboardData(text: 'https://youtu.be/${v['id']}'),
+                    ClipboardData(
+                      text: isFacebookLink('${v['id']}')
+                          ? '${v['id']}'
+                          : 'https://youtu.be/${v['id']}',
+                    ),
                   );
                   toast('Đã sao chép liên kết');
                 },
@@ -2254,30 +2410,37 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
             children: [
               Expanded(
                 flex: 6,
-                child: AspectRatio(aspectRatio: 16 / 9, child: videoFrame()),
+                child: AspectRatio(
+                  aspectRatio: videoAspect,
+                  child: videoFrame(),
+                ),
               ),
               Expanded(
                 flex: 4,
-                child: RelatedPanel(
-                  seed: v,
-                  header: detail,
-                  hidden: {...profile.hidden, ...profile.finished},
-                  itemBuilder: queuedRow,
-                ),
+                child: isFacebookLink('${v['id']}')
+                    ? SingleChildScrollView(child: detail)
+                    : RelatedPanel(
+                        seed: v,
+                        header: detail,
+                        hidden: {...profile.hidden, ...profile.finished},
+                        itemBuilder: queuedRow,
+                      ),
               ),
             ],
           );
         }
         return Column(
           children: [
-            AspectRatio(aspectRatio: 16 / 9, child: videoFrame()),
+            AspectRatio(aspectRatio: videoAspect, child: videoFrame()),
             Expanded(
-              child: RelatedPanel(
-                seed: v,
-                header: detail,
-                hidden: {...profile.hidden, ...profile.finished},
-                itemBuilder: queuedRow,
-              ),
+              child: isFacebookLink('${v['id']}')
+                  ? SingleChildScrollView(child: detail)
+                  : RelatedPanel(
+                      seed: v,
+                      header: detail,
+                      hidden: {...profile.hidden, ...profile.finished},
+                      itemBuilder: queuedRow,
+                    ),
             ),
           ],
         );
@@ -2351,7 +2514,9 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
                     ),
                     const SizedBox(height: 5),
                     InkWell(
-                      onTap: () => openChannel(v),
+                      onTap: isFacebookLink('${v['id']}')
+                          ? null
+                          : () => openChannel(v),
                       child: Padding(
                         padding: const EdgeInsets.symmetric(vertical: 4),
                         child: Text(
@@ -2454,7 +2619,9 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
                   style: const TextStyle(color: muted, fontSize: 11),
                 ),
                 InkWell(
-                  onTap: () => openChannel(v),
+                  onTap: isFacebookLink('${v['id']}')
+                      ? null
+                      : () => openChannel(v),
                   child: const Padding(
                     padding: EdgeInsets.symmetric(vertical: 4),
                     child: Text('Xem kênh', style: TextStyle(fontSize: 12)),
@@ -2647,7 +2814,8 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
                   crossAxisSpacing: 16,
                   mainAxisSpacing: 12,
                   mainAxisExtent:
-                      (b.crossAxisExtent - (n - 1) * 16) / n * 9 / 16 + 104,
+                      (b.crossAxisExtent - (n - 1) * 16) / n * 9 / 16 +
+                      140 * MediaQuery.textScalerOf(context).scale(1),
                 ),
               );
             },
@@ -2902,7 +3070,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
         onTap: clearViewingData,
       ),
       const Text(
-        'Sở thích không được gửi tới máy chủ riêng. Chất lượng tự động tiết kiệm dữ liệu: tối đa 360p trên mạng tính dung lượng và 480p trên mạng không tính dung lượng khi có nguồn phù hợp. Bạn có thể chọn chất lượng khác trong trình phát. Media chỉ được tải trước trên mạng không tính dung lượng.',
+        'Sở thích không được gửi tới máy chủ riêng. Chất lượng tự động tiết kiệm dữ liệu: ưu tiên 480p trên dữ liệu SIM và mức cao nhất tương thích trên Wi-Fi. Bạn có thể chọn chất lượng khác trong trình phát. Media chỉ được tải trước trên mạng không tính dung lượng.',
         style: TextStyle(color: muted, fontSize: 12, height: 1.5),
       ),
       ListTile(
