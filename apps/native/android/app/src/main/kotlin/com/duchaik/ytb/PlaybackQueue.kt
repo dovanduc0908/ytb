@@ -19,7 +19,7 @@ class PlaybackQueue(private val service: PlaybackService) {
     var repeat = 0; private set
     var items = mutableListOf<Map<String,Any?>>() ; private set
     private val previous = java.util.ArrayDeque<Map<String,Any?>>()
-    init { runCatching { val a=JSONArray(prefs.getString("items","[]")); for(i in 0 until a.length()) { val j=a.getJSONObject(i);items.add(j.keys().asSequence().associateWith { j.get(it) }) } } }
+    init { runCatching { val a=JSONArray(prefs.getString("items","[]")); for(i in 0 until a.length()) { val j=a.getJSONObject(i);if (MediaIdentity.facebook(j.optString("id"))) items.add(j.keys().asSequence().associateWith { j.get(it) }) } } }
     fun replace(raw: List<Map<String,Any?>>, mode: Int = repeat) {
         invalidate(); error=null; repeat=mode.coerceIn(0,2)
         val seen=mutableSetOf<String>()

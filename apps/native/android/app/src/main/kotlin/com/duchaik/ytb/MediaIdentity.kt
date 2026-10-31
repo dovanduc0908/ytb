@@ -10,7 +10,7 @@ object MediaIdentity {
         u.scheme == "https" && u.userInfo == null && u.port == -1 &&
             (h == "facebook.com" || h.endsWith(".facebook.com") || h == "fb.watch")
     }.getOrDefault(false)
-    fun valid(raw: String) = Regex("^[A-Za-z0-9_-]{11}$").matches(raw) || facebook(raw)
+    fun valid(raw: String) = facebook(raw)
     fun canonical(raw: String): String {
         if (!facebook(raw)) return raw
         val u = URI(raw)
@@ -23,6 +23,6 @@ object MediaIdentity {
     fun mediaUrl(raw: String): Boolean = runCatching {
         val u = URI(raw); val h = u.host?.lowercase().orEmpty()
         u.scheme == "https" && u.userInfo == null && u.port == -1 &&
-            listOf("googlevideo.com", "fbcdn.net", "facebook.com", "youtube.com").any { h == it || h.endsWith(".$it") }
+            listOf("fbcdn.net", "facebook.com").any { h == it || h.endsWith(".$it") }
     }.getOrDefault(false)
 }

@@ -38,7 +38,7 @@ object OfflineDownloads {
         require(StartupCache.unmetered(c)) { "Chỉ tải khi dùng mạng không tính dung lượng" }
         require(metadata["isLive"] != true) { "Không hỗ trợ tải livestream" }
         val id = metadata["id"] as? String ?: ""
-        require(MediaIdentity.valid(id)) { "Video không hợp lệ" }
+        require(MediaIdentity.facebook(id)) { "Không hỗ trợ tải YouTube. Hãy dùng YouTube chính thức." }
         require(list(c).none { it["id"] == id }) { "Video đã được tải" }
         dir(c).listFiles()?.filter { it.name.endsWith(".part") }?.forEach { it.delete() }
         val used = dir(c).listFiles()?.sumOf { it.length() } ?: 0L
@@ -87,7 +87,7 @@ object OfflineDownloads {
                 val item = JSONObject().put("id", id).put("title", metadata["title"] ?: "Video").put("author", metadata["author"] ?: "")
                     .put("duration", (metadata["duration"] as? Number)?.toLong() ?: 0).put("height", (selected["height"] as Number).toInt())
                     .put("mime", if (audioOnly) selected["audioMime"] else selected["mime"]).put("audioMime", selected["audioMime"])
-                    .put("audioOnly", audioOnly).put("muxed", audio.isNullOrBlank()).put("source", metadata["source"] ?: "youtube").put("canonicalUrl", metadata["canonicalUrl"] ?: "").put("size", bytes)
+                    .put("audioOnly", audioOnly).put("muxed", audio.isNullOrBlank()).put("source", metadata["source"] ?: "facebook").put("canonicalUrl", metadata["canonicalUrl"] ?: "").put("size", bytes)
                 synchronized(this) { val all = read(app); all.put(item); check(prefs(app).edit().putString("items", all.toString()).commit()) }
                 message = "Tải xong"
             } catch (e: Exception) {
@@ -96,6 +96,7 @@ object OfflineDownloads {
         }
     }
     fun data(c: Context, id: String): Map<String, Any?> {
+        require(MediaIdentity.facebook(id)) { "Không hỗ trợ phát YouTube ngoại tuyến." }
         val item = list(c).firstOrNull { it["id"] == id } ?: error("Không tìm thấy bản tải")
         val audio = File(dir(c), "${MediaIdentity.fileKey(id)}.audio"); val video = File(dir(c), "${MediaIdentity.fileKey(id)}.video")
         require((item["muxed"] == true || audio.isFile) && (item["audioOnly"] == true || video.isFile)) { "Tệp tải không còn" }

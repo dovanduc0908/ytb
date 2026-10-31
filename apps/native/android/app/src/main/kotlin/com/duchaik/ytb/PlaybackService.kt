@@ -149,31 +149,8 @@ class PlaybackService : MediaSessionService() {
         val generation = ++captionGeneration
         captions = emptyList(); captionSelected = -1
         if (index < 0) { captionStatus = "ready"; return }
-        val track = captionTracks.firstOrNull { (it["id"] as? Number)?.toInt() == index } ?: throw IllegalArgumentException("Phụ đề không khả dụng")
-        val url = track["url"] as? String ?: throw IllegalArgumentException("Phụ đề không khả dụng")
-        val mediaEpoch = metadataGeneration
-        val mediaId = metadata["id"] as? String
-        captionStatus = "loading"
-        metadataWorker.execute {
-            val result = runCatching {
-                val initial = runCatching { VideoExtras.captions(url) }.getOrDefault(emptyList())
-                if (initial.isNotEmpty()) initial else {
-                    val id = mediaId ?: return@runCatching emptyList()
-                    @Suppress("UNCHECKED_CAST")
-                    val updated = VideoExtras.details(id)["captions"] as? List<Map<String, Any?>> ?: emptyList()
-                    val same = updated.firstOrNull { it["language"] == track["language"] && it["automatic"] == track["automatic"] }
-                    val refreshedUrl = same?.get("url") as? String ?: return@runCatching emptyList()
-                    VideoExtras.captions(refreshedUrl)
-                }
-            }
-            result.exceptionOrNull()?.let { android.util.Log.w("YTBCaption", "caption request failed: ${it.javaClass.simpleName}: ${it.message?.substringBefore("https:")?.take(100)}") }
-            handler.post {
-                if (generation != captionGeneration || mediaEpoch != metadataGeneration) return@post
-                val loaded = result.getOrNull().orEmpty()
-                if (loaded.isEmpty()) { captionStatus = "error"; return@post }
-                captions = loaded; captionSelected = index; captionStatus = "ready"
-            }
-        }
+        captionStatus = "unavailable"
+        throw IllegalArgumentException("Phụ đề của nguồn này không khả dụng")
     }
 
     @Volatile private var metadataGeneration = 0L
@@ -204,7 +181,14 @@ class PlaybackService : MediaSessionService() {
     var firstFrameMs = -1L
     var frameSerial = 0L
     fun loadSources(tracks: List<Map<String, Any?>>, id: String, title: String?, author: String?, position: Long, details: Map<String, Any?> = emptyMap()) {
+        require(MediaIdentity.facebook(id)) { "YouTube chỉ phát bằng ứng dụng chính thức." }
         require(tracks.isNotEmpty())
+        require(tracks.all { track ->
+            track["url"] is String &&
+            listOfNotNull(track["url"] as? String, track["audioUrl"] as? String).all { url ->
+                (details["offline"] == true && url.startsWith("file:")) || MediaIdentity.mediaUrl(url)
+            }
+        }) { "Nguồn phát không được hỗ trợ" }
         saveProgress()
         recoveryEpoch++; recoveryAttempts = 0; recovering = false; enhancementSuspended = false
         sources = tracks
@@ -219,34 +203,10 @@ class PlaybackService : MediaSessionService() {
         lastError = null
         timerExpired = false
         selectQuality(0, position, true)
-        val generation = ++metadataGeneration
-        if (metadata["offline"] != true && Regex("^[A-Za-z0-9_-]{11}$").matches(id)) {
-            if (metadata["category"]?.toString().isNullOrBlank()) metadataWorker.execute {
-                if (generation != metadataGeneration) return@execute
-                val category = runCatching { FastPlayerSource.category(id) }.getOrDefault("")
-                handler.post { if (generation == metadataGeneration && metadata["id"] == id && category.isNotBlank()) {
-                    metadata = metadata + ("category" to category); musicQueue.updateMetadata(metadata)
-                } }
-            }
-            metadataWorker.execute {
-                if (generation != metadataGeneration) return@execute
-                val detailsResult = runCatching { VideoExtras.details(id) }.getOrNull()
-                handler.post {
-                    if (generation != metadataGeneration || metadata["id"] != id) return@post
-                    if (detailsResult == null) { captionStatus = "unavailable"; chaptersLoading = false; return@post }
-                    @Suppress("UNCHECKED_CAST")
-                    captionTracks = detailsResult["captions"] as? List<Map<String, Any?>> ?: emptyList()
-                    captionStatus = "ready"
-                    val category = detailsResult["category"] as? String ?: ""
-                    if (category.isNotBlank()) { metadata = metadata + ("category" to category); musicQueue.updateMetadata(metadata) }
-                }
-                if (detailsResult != null && generation == metadataGeneration) {
-                    val list = runCatching { VideoExtras.chapters(id, detailsResult["description"] as? String ?: "") }.getOrDefault(emptyList())
-                    handler.post { if (generation == metadataGeneration && metadata["id"] == id) { chapters = list; chaptersLoading = false } }
-                }
-            }
-        } else { captionStatus = "unavailable"; chaptersLoading = false }
+        metadataGeneration++
+        captionStatus = "unavailable"; chaptersLoading = false
     }
+
     fun selectQuality(height: Int, position: Long = player.currentPosition, playing: Boolean = player.playWhenReady) {
         require(height == 0 || sources.any { (it["height"] as? Number)?.toInt() == height }) { "Chất lượng không được hỗ trợ" }
         qualityMode = height

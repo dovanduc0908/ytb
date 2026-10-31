@@ -10,7 +10,7 @@ import java.io.EOFException
 
 /** Bounded HTTPS Range requests avoid requesting a whole long YouTube media file. */
 class ChunkedHttpDataSource(headers: Map<String, String>) : DataSource {
-    private val upstream = OkHttpDataSource.Factory(YouTubeHttp.mediaClient)
+    private val upstream = OkHttpDataSource.Factory(MediaHttp.mediaClient)
         .setDefaultRequestProperties(headers).createDataSource()
     private var spec: DataSpec? = null
     private var position = 0L
