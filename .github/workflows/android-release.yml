@@ -39,6 +39,9 @@ jobs:
           flutter pub get
           flutter analyze
           flutter test test
+      - name: Bootstrap Android and verify debug build
+        working-directory: apps/native
+        run: flutter build apk --debug --target-platform android-arm64
       - name: Kotlin regression tests
         working-directory: apps/native/android
         run: ./gradlew :app:testDebugUnitTest
