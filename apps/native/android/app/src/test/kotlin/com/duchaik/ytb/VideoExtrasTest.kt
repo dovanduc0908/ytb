@@ -45,10 +45,4 @@ class VideoExtrasTest {
         assertEquals(1200, cues.first().start)
         try { VideoExtras.parseXmlCaptions("<!DOCTYPE x [<!ENTITY test SYSTEM 'file:///tmp/test'>]><x>&test;</x>"); fail("DTD must be rejected") } catch (_: IllegalArgumentException) {}
     }
-    @Test fun searchFilterEncodesVideoDateAndDuration() {
-        val search = YouTubeSearch()
-        assertEquals("EgIQAQ==", search.filterParams(0, 0))
-        assertEquals("EgQIAxAB", search.filterParams(3, 0))
-        assertEquals("EgQQARgB", search.filterParams(0, 1))
-    }
 }

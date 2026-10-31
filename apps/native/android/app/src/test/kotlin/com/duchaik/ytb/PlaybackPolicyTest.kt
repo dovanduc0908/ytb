@@ -6,16 +6,13 @@ import org.json.JSONObject
 
 class PlaybackPolicyTest {
     private fun song(id: String) = mapOf<String,Any?>("id" to id,"title" to "Official Audio $id","category" to "Music","duration" to 240)
-    @Test fun currentYouTubeChannelCardsKeepViewCounts() {
-        val raw = javaClass.getResource("/channel-page.json")!!.readText()
-        val parser = YouTubeCollections::class.java.getDeclaredMethod("parse", Any::class.java, String::class.java)
-        parser.isAccessible = true
-        @Suppress("UNCHECKED_CAST")
-        val result = parser.invoke(YouTubeCollections(), JSONObject(raw), "channel") as Map<String,Any?>
-        @Suppress("UNCHECKED_CAST")
-        val videos = result["videos"] as List<Map<String,Any?>>
-        assertEquals(2,videos.size)
-        assertTrue(videos.all { it["views"].toString().contains("lượt xem") })
+    @Test fun nativePlaybackAndDownloadsRejectYouTubeAndLookalikes() {
+        assertFalse(MediaIdentity.valid("aqz-KE-bpKQ"))
+        assertFalse(MediaIdentity.valid("https://www.youtube.com/watch?v=aqz-KE-bpKQ"))
+        assertFalse(MediaIdentity.mediaUrl("https://rr1.googlevideo.com/videoplayback"))
+        assertFalse(MediaIdentity.mediaUrl("https://facebook.com.evil.test/video.mp4"))
+        assertTrue(MediaIdentity.valid("https://www.facebook.com/reel/12345"))
+        assertTrue(MediaIdentity.mediaUrl("https://video.xx.fbcdn.net/video.mp4"))
     }
     @Test fun sixDistinctQualifiedSongsTeachTheProfileButFilmsDoNot() {
         val taste = MusicTaste()
