@@ -6,14 +6,15 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'search_box.dart';
+import 'youtube_account_page.dart';
+import 'official_youtube.dart';
+
+import 'package:url_launcher/url_launcher.dart';
+
 import 'player_overlay.dart';
 import 'recommendations.dart';
-import 'feed_repository.dart';
-import 'related_panel.dart';
 import 'queue_sheet.dart';
-import 'channel_page.dart';
 import 'video_meta.dart';
-import 'shorts_page.dart';
 import 'tv_sheet.dart';
 import 'resume_policy.dart';
 
@@ -247,6 +248,10 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
   }
 
   Future<void> addQueued(Video v, {bool next = false}) async {
+    if (!isFacebookLink('${v['id']}')) {
+      await openOfficial(OfficialYoutube.destination('${v['id']}'));
+      return;
+    }
     await syncQueue();
     final list = queueItems.where((x) => x['id'] != v['id']).toList();
     next ? list.insert(0, v) : list.add(v);
@@ -348,99 +353,38 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
       ),
     ],
   );
-  Future<void> selectTab(int i) async {
-    if (tab == 1 && i != 1) {
-      ++loadGeneration;
-      await command('pause');
-      await prefs?.setString(
-        'shortsProfile',
-        jsonEncode(shortsProfile.toJson()),
-      );
-      final restore = beforeShorts;
-      beforeShorts = null;
-      if (restore != null) {
-        await open(restore);
-        if (!beforeShortsPlaying) await command('pause');
-      } else {
-        active = null;
+  Future<void> openOfficial(Uri uri) async {
+    await persistProgress();
+    await command('pause');
+    try {
+      if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+        throw StateError('launch');
       }
+    } catch (_) {
+      if (mounted) toast('Không mở được liên kết. Hãy thử lại.');
     }
-    if (i == 1 && tab != 1) {
-      beforeShorts = active == null ? null : Map.from(active!);
-      beforeShortsPlaying = state['playing'] == true;
-      await persistProgress();
-      await command('pause');
+  }
+
+  Future<void> showYoutubeAccount() async {
+    await command('pause');
+    if (!mounted) return;
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute<void>(builder: (_) => const YoutubeAccountPage()));
+  }
+
+  Future<void> selectTab(int i) async {
+    if (i == 1) {
+      await showYoutubeAccount();
+      return;
     }
     if (!mounted) return;
     setState(() {
       tab = i;
       watch = false;
     });
-    if (i == 0) loadFeed(mode: 'forYou');
   }
 
-  Widget karaokePage() => Column(
-    children: [
-      Padding(
-        padding: const EdgeInsets.all(12),
-        child: Row(
-          children: [
-            const Expanded(
-              child: Text(
-                'Karaoke',
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-              ),
-            ),
-            TextButton.icon(
-              onPressed: showQueue,
-              icon: const Icon(Icons.queue_music),
-              label: Text('Hàng đợi (${queueItems.length})'),
-            ),
-          ],
-        ),
-      ),
-      if (playlists.isNotEmpty)
-        SizedBox(
-          height: 60,
-          child: ListView(
-            scrollDirection: Axis.horizontal,
-            children: playlists
-                .map(
-                  (p) => Padding(
-                    padding: const EdgeInsets.all(6),
-                    child: InputChip(
-                      label: Text(p['name']),
-                      onPressed: () async {
-                        final list = (p['videos'] as List)
-                            .map((v) => Map<String, dynamic>.from(v))
-                            .toList();
-                        if (list.isNotEmpty) {
-                          await setQueue(list.skip(1).toList(), repeatMode);
-                          open(list.first, fromStart: true);
-                        }
-                      },
-                      onDeleted: () {
-                        setState(() => playlists.remove(p));
-                        prefs?.setString('playlists', jsonEncode(playlists));
-                      },
-                    ),
-                  ),
-                )
-                .toList(),
-          ),
-        ),
-      Expanded(
-        child: RelatedPanel(
-          key: const ValueKey('karaoke'),
-          seed: const {'id': '', 'title': 'karaoke Việt Nam'},
-          header: const SizedBox.shrink(),
-          hidden: {...profile.hidden, ...profile.finished},
-          initialQuery: 'karaoke Việt Nam',
-          itemBuilder: queuedRow,
-        ),
-      ),
-    ],
-  );
   Widget libraryPage() => DefaultTabController(
     length: 3,
     child: Column(
@@ -503,15 +447,10 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     ],
   );
 
-  final feedScroll = ScrollController();
-  FeedRepository? feed;
-  Future<FeedPage>? preparedPage;
-  bool isFeed = true, moreLoading = false, hasMore = true;
-  String feedMode = 'forYou';
-  String? searchContinuation, pageError;
+  bool isFeed = true;
   DateTime lastPoll = DateTime.now();
   String feedDay = '';
-  int sessionWatchMs = 0, lastPrefetchIndex = -1;
+  int sessionWatchMs = 0;
   Future<void> saveProfile() async {
     await prefs?.setString(
       'recommendationProfile',
@@ -520,183 +459,16 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     await prefs?.setString('shortsProfile', jsonEncode(shortsProfile.toJson()));
   }
 
-  void warmCards(List<Video> cards) {
+  Future<void> loadFeed() async {
     if (!mounted) return;
-    unawaited(
-      source
-          .invokeMethod('prefetch', {
-            'ids': cards.take(1).map((v) => v['id']).toList(),
-          })
-          .catchError((_) => null),
-    );
-    for (final v in cards.take(3)) {
-      unawaited(
-        precacheImage(
-          ResizeImage(
-            NetworkImage(
-              v['thumbnail'] ??
-                  'https://i.ytimg.com/vi/${v['id']}/hqdefault.jpg',
-            ),
-            width: 480,
-          ),
-          context,
-        ),
-      );
-    }
-  }
-
-  void onFeedScroll() {
-    if (!feedScroll.hasClients || watch || searchFocused || videos.isEmpty) {
-      return;
-    }
-    final width = MediaQuery.sizeOf(context).width;
-    final columns = width >= 1100
-        ? 4
-        : width >= 800
-        ? 3
-        : width >= 550
-        ? 2
-        : 1;
-    final rowHeight =
-        width / columns * 9 / 16 +
-        140 * MediaQuery.textScalerOf(context).scale(1);
-    final index =
-        (((feedScroll.offset - 220).clamp(0, double.infinity) / rowHeight)
-                    .floor() *
-                columns)
-            .clamp(0, videos.length - 1);
-    if (index != lastPrefetchIndex) {
-      lastPrefetchIndex = index;
-      warmCards(videos.skip(index).take(6).toList());
-    }
-    if (feedScroll.position.extentAfter < 1000 &&
-        hasMore &&
-        !moreLoading &&
-        !loading &&
-        pageError == null) {
-      unawaited(loadMore());
-    }
-  }
-
-  Future<void> loadFeed({String? mode}) async {
-    final seq = ++searchGeneration;
-    final selected = mode ?? feedMode;
-    final repo = FeedRepository(profile, selected);
-    feed = repo;
-    preparedPage = null;
-    feedDay = DateTime.now().toIso8601String().substring(0, 10);
-    List<Video> cached = [];
-    try {
-      final data =
-          jsonDecode(prefs?.getString('feedCache_$selected') ?? '{}') as Map;
-      if (DateTime.now().millisecondsSinceEpoch - (data['time'] as num? ?? 0) <
-          36 * 3600000) {
-        cached = (data['videos'] as List? ?? [])
-            .map((v) => Map<String, dynamic>.from(v))
-            .where((v) => !profile.excludes(v['id']))
-            .toList();
-      }
-    } catch (_) {}
-    if (!mounted) return;
+    ++searchGeneration;
     setState(() {
-      isFeed = true;
-      feedMode = selected;
-      submittedQuery = '';
-      searchController.clear();
-      topic = selected == 'vn'
-          ? 'Việt Nam'
-          : selected == 'world'
-          ? 'Thế giới'
-          : 'Dành cho bạn';
-      watch = false;
-      tab = 0;
-      videos = cached;
-      loading = true;
-      moreLoading = false;
-      hasMore = true;
-      error = null;
-      pageError = null;
-      lastPrefetchIndex = -1;
-    });
-    if (feedScroll.hasClients) feedScroll.jumpTo(0);
-    final page = await repo.next();
-    if (!mounted || seq != searchGeneration || !isFeed) return;
-    setState(() {
-      if (page.videos.isNotEmpty) videos = page.videos;
+      videos = history.where((v) => isFacebookLink('${v['id']}')).toList();
       loading = false;
-      hasMore = page.hasMore;
-      if (page.error != null) {
-        pageError = 'Chưa cập nhật được đề xuất. Bạn có thể thử lại.';
-      }
+      feedDay = DateTime.now().toIso8601String().substring(0, 10);
+      error = null;
+      isFeed = true;
     });
-    if (page.videos.isNotEmpty) {
-      await prefs?.setString(
-        'feedCache_$selected',
-        jsonEncode({
-          'time': DateTime.now().millisecondsSinceEpoch,
-          'videos': page.videos,
-        }),
-      );
-      if (!mounted || seq != searchGeneration) return;
-      warmCards(page.videos);
-      if (hasMore) preparedPage = repo.next();
-    }
-  }
-
-  Future<void> loadMore() async {
-    if (moreLoading || loading || !hasMore) return;
-    final seq = searchGeneration;
-    setState(() {
-      moreLoading = true;
-      pageError = null;
-    });
-    try {
-      List<Video> extra;
-      if (isFeed) {
-        final current = feed!;
-        final page = await (preparedPage ?? current.next());
-        if (!mounted || seq != searchGeneration) return;
-        preparedPage = null;
-        if (page.error != null) throw page.error!;
-        extra = page.videos.where((v) => !profile.excludes(v['id'])).toList();
-        hasMore = page.hasMore;
-        if (hasMore) preparedPage = current.next();
-      } else {
-        if (searchContinuation == null) {
-          hasMore = false;
-          return;
-        }
-        final old = searchContinuation;
-        final data = Map<String, dynamic>.from(
-          await source.invokeMethod('search', {
-            'query': submittedQuery,
-            'upload': searchDate,
-            'durationFilter': searchDuration,
-            'continuation': old,
-          }),
-        );
-        if (!mounted || seq != searchGeneration) return;
-        searchContinuation = data['continuation'] as String?;
-        hasMore = searchContinuation != null && searchContinuation != old;
-        extra = (data['videos'] as List)
-            .map((v) => Map<String, dynamic>.from(v))
-            .toList();
-      }
-      final ids = videos.map((v) => v['id']).toSet();
-      extra = extra.where((v) => ids.add(v['id'])).toList();
-      setState(() {
-        videos.addAll(extra);
-        if (extra.isEmpty && hasMore) pageError = 'Chưa có video mới trong trang này. Bấm tải tiếp để thử nguồn khác.';
-      });
-    } catch (_) {
-      if (mounted && seq == searchGeneration) {
-        setState(() => pageError = 'Mạng đang chậm. Bấm tải tiếp để thử lại.');
-      }
-    } finally {
-      if (mounted && seq == searchGeneration) {
-        setState(() => moreLoading = false);
-      }
-    }
   }
 
   void backToBrowse() {
@@ -751,9 +523,6 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
 
   Future<void> invalidateFeedCache() async {
     searchGeneration++;
-    preparedPage = null;
-    feed = null;
-    moreLoading = false;
     for (final mode in ['forYou', 'vn', 'world']) {
       await prefs?.remove('feedCache_$mode');
     }
@@ -765,7 +534,6 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
   final videoKey = GlobalKey();
   Timer? controlsTimer;
   bool controlsVisible = true, changingFull = false, screenLocked = false;
-  bool loadingQualities = false;
   final fallbackIds = <String>{};
   SharedPreferences? prefs;
   List<Map<String, dynamic>> videos = [], history = [], saved = [];
@@ -783,7 +551,6 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
   double preferredSpeed = 1;
   String topic = 'Khám phá';
   String submittedQuery = '';
-  int searchDate = 0, searchDuration = 0;
   bool searchFocused = false;
   Timer? ticker;
   int ticks = 0;
@@ -791,7 +558,6 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    feedScroll.addListener(onFeedScroll);
     player.setMethodCallHandler((call) async {
       if (call.method == 'pipChanged' && mounted) {
         setState(() => inPip = call.arguments == true);
@@ -907,7 +673,6 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     searchController.dispose();
     historyController.dispose();
     savedController.dispose();
-    feedScroll.dispose();
     super.dispose();
   }
 
@@ -939,37 +704,18 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     } on PlatformException catch (_) {}
   }
 
-  Future<Map<String, dynamic>> api(
-    String path, {
-    Map<String, dynamic>? body,
-  }) async {
+  Future<Map<String, dynamic>> resolveFacebook(String url) async {
     try {
-      final args = path.startsWith('/search')
-          ? {
-              'query': Uri.parse(path).queryParameters['q'] ?? '',
-              'upload': searchDate,
-              'durationFilter': searchDuration,
-            }
-          : body;
       return Map<String, dynamic>.from(
         await source
-            .invokeMethod(
-              path.startsWith('/search')
-                  ? 'search'
-                  : path == '/resolveFacebook'
-                  ? 'resolveFacebook'
-                  : path == '/resolveFull'
-                  ? 'resolveFull'
-                  : 'resolve',
-              args,
-            )
+            .invokeMethod('resolveFacebook', {'url': url})
             .timeout(const Duration(seconds: 90)),
       );
     } on TimeoutException {
-      throw Exception('YouTube phản hồi chậm. Hãy thử lại.');
+      throw Exception('Facebook phản hồi chậm. Hãy thử lại.');
     } on PlatformException catch (e) {
       throw Exception(
-        e.message ?? 'Không kết nối được YouTube. Kiểm tra Internet.',
+        e.message ?? 'Không kết nối được Facebook. Kiểm tra Internet.',
       );
     }
   }
@@ -978,62 +724,11 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     q = q.trim();
     if (q.isEmpty) return;
     FocusManager.instance.primaryFocus?.unfocus();
-    final newQuery = submittedQuery != q;
     submittedQuery = q;
-    final id = videoId(q);
-    if (id != null) {
-      await open({'id': id, 'title': 'Đang lấy thông tin video', 'author': ''});
-      return;
-    }
     if (isFacebookLink(q)) {
       await open({'id': q, 'title': 'Đang lấy thông tin video', 'author': ''});
-      return;
-    }
-    if (newQuery && profile.enabled) {
-      profile.boost({'title': q}, .35);
-      unawaited(saveProfile());
-    }
-    final seq = ++searchGeneration;
-    if (mounted) {
-      setState(() {
-        isFeed = false;
-        preparedPage = null;
-        searchContinuation = null;
-        hasMore = false;
-        pageError = null;
-        moreLoading = false;
-        loading = true;
-        error = null;
-        tab = 0;
-        watch = false;
-      });
-    }
-    try {
-      final d = await api('/search?q=${Uri.encodeQueryComponent(q)}');
-      if (mounted && seq == searchGeneration) {
-        setState(() {
-          videos = (d['videos'] as List)
-              .map((e) => Map<String, dynamic>.from(e))
-              .toList();
-          loading = false;
-          searchContinuation = d['continuation'] as String?;
-          hasMore = searchContinuation != null;
-        });
-        unawaited(
-          source
-              .invokeMethod('prefetch', {
-                'ids': videos.take(2).map((v) => v['id']).toList(),
-              })
-              .catchError((_) => null),
-        );
-      }
-    } catch (e) {
-      if (mounted && seq == searchGeneration) {
-        setState(() {
-          error = clean(e);
-          loading = false;
-        });
-      }
+    } else {
+      await openOfficial(OfficialYoutube.destination(q));
     }
   }
 
@@ -1058,6 +753,10 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
     bool fromStart = false,
     bool asShort = false,
   }) async {
+    if (!isFacebookLink('${v['id']}')) {
+      await openOfficial(OfficialYoutube.destination('${v['id']}'));
+      return;
+    }
     v = {...v, 'id': canonicalMediaId('${v['id']}')};
     final seq = ++loadGeneration;
     unawaited(source.invokeMethod<void>('cancelPrefetch').catchError((_) {}));
@@ -1087,16 +786,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
       final results = await Future.wait<dynamic>([
         tvConnected
             ? Future.value(Map<String, dynamic>.from(v))
-            : api(
-                isFacebookLink('${v['id']}')
-                    ? '/resolveFacebook'
-                    : forceFull
-                    ? '/resolveFull'
-                    : '/resolve',
-                body: isFacebookLink('${v['id']}')
-                    ? {'url': v['id']}
-                    : {'id': v['id']},
-              ),
+            : resolveFacebook('${v['id']}'),
         command('pause'),
         if (!tvConnected)
           player
@@ -1375,47 +1065,6 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
             'Chỉ hiển thị các mức nguồn và máy hỗ trợ.',
             style: TextStyle(color: muted),
           ),
-          if (active?['extendedQualities'] != true &&
-              !isFacebookLink('${active?['id']}'))
-            TextButton.icon(
-              icon: const Icon(Icons.hd_outlined),
-              label: Text(
-                loadingQualities
-                    ? 'Đang tải thêm chất lượng…'
-                    : 'Tải thêm chất lượng 2K / 4K',
-              ),
-              onPressed: loadingQualities
-                  ? null
-                  : () async {
-                      Navigator.pop(context);
-                      setState(() => loadingQualities = true);
-                      final id = active?['id'];
-                      try {
-                        final data = await api(
-                          '/resolveFull',
-                          body: {'id': id},
-                        );
-                        if (mounted && active?['id'] == id) {
-                          await player.invokeMethod('sources', {
-                            'id': id,
-                            'tracks': data['tracks'],
-                          });
-                          active?['extendedQualities'] = true;
-                          state = {
-                            ...state,
-                            'qualities': (data['tracks'] as List)
-                                .map((track) => track['height'])
-                                .toList(),
-                          };
-                          if (mounted) qualitySheet();
-                        }
-                      } catch (e) {
-                        toast(clean(e));
-                      } finally {
-                        if (mounted) setState(() => loadingQualities = false);
-                      }
-                    },
-            ),
           const SizedBox(height: 12),
           Wrap(
             spacing: 8,
@@ -2009,6 +1658,14 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
                                     ),
                                     onTap: () async {
                                       Navigator.pop(context);
+                                      if (!isFacebookLink('${item['id']}')) {
+                                        await openOfficial(
+                                          OfficialYoutube.destination(
+                                            '${item['id']}',
+                                          ),
+                                        );
+                                        return;
+                                      }
                                       try {
                                         final data = Map<String, dynamic>.from(
                                           (await player
@@ -2386,20 +2043,6 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
             padding: const EdgeInsets.all(16),
             child: Text('${state['queueError']}'),
           ),
-        SwitchListTile(
-          title: const Text('Tự phát video tiếp theo'),
-          subtitle: Text(
-            state['musicError'] as String? ??
-                'Tự thêm video liên quan khi hàng đợi sắp hết',
-          ),
-          value: state['musicAuto'] == true,
-          onChanged: profile.enabled
-              ? (value) async {
-                  await command('musicAuto', {'enabled': value});
-                  await poll();
-                }
-              : null,
-        ),
         const SizedBox(height: 24),
       ],
     );
@@ -2417,44 +2060,32 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
                   child: videoFrame(),
                 ),
               ),
-              Expanded(
-                flex: 4,
-                child: isFacebookLink('${v['id']}')
-                    ? SingleChildScrollView(child: detail)
-                    : RelatedPanel(
-                        seed: v,
-                        header: detail,
-                        hidden: {...profile.hidden, ...profile.finished},
-                        itemBuilder: queuedRow,
-                      ),
-              ),
+              Expanded(flex: 4, child: SingleChildScrollView(child: detail)),
             ],
           );
         }
         return Column(
           children: [
             AspectRatio(aspectRatio: videoAspect, child: videoFrame()),
-            Expanded(
-              child: isFacebookLink('${v['id']}')
-                  ? SingleChildScrollView(child: detail)
-                  : RelatedPanel(
-                      seed: v,
-                      header: detail,
-                      hidden: {...profile.hidden, ...profile.finished},
-                      itemBuilder: queuedRow,
-                    ),
-            ),
+            Expanded(child: SingleChildScrollView(child: detail)),
           ],
         );
       },
     );
   }
 
-  void openChannel(Video video) => Navigator.of(context).push(
-    MaterialPageRoute<void>(
-      builder: (_) => ChannelPage(video: video, onPlay: (v) => open(v)),
-    ),
-  );
+  void openChannel(Video video) {
+    if (isFacebookLink('${video['id']}')) {
+      openOfficial(Uri.parse('${video['id']}'));
+      return;
+    }
+    final id = video['channelId'];
+    openOfficial(
+      id is String && RegExp(r'^UC[A-Za-z0-9_-]+$').hasMatch(id)
+          ? Uri.https('www.youtube.com', '/channel/$id')
+          : OfficialYoutube.destination('${video['id']}'),
+    );
+  }
 
   Widget thumb(Map<String, dynamic> v) => Stack(
     fit: StackFit.expand,
@@ -2646,218 +2277,78 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
       ),
     ),
   );
-  Widget discover() => RefreshIndicator(
-    onRefresh: () => isFeed ? loadFeed() : search(submittedQuery),
-    child: CustomScrollView(
-      controller: feedScroll,
-      physics: const AlwaysScrollableScrollPhysics(),
-      slivers: [
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                VideoSearchBox(
-                  controller: searchController,
-                  onSearch: (q) {
-                    topic = 'Tìm kiếm';
-                    search(q);
-                  },
-                  onPreview: (query) => source
-                      .invokeMethod('previewSearch', {'query': query})
-                      .catchError((_) => null),
-                  onFocusChanged: (value) =>
-                      setState(() => searchFocused = value),
-                ),
-                if (!isFeed)
-                  Wrap(
-                    spacing: 16,
-                    children: [
-                      DropdownButton<int>(
-                        value: searchDate,
-                        items: const [
-                          DropdownMenuItem(
-                            value: 0,
-                            child: Text('Mọi thời gian'),
-                          ),
-                          DropdownMenuItem(
-                            value: 1,
-                            child: Text('Một giờ qua'),
-                          ),
-                          DropdownMenuItem(value: 2, child: Text('Hôm nay')),
-                          DropdownMenuItem(value: 3, child: Text('Tuần này')),
-                          DropdownMenuItem(value: 4, child: Text('Tháng này')),
-                          DropdownMenuItem(value: 5, child: Text('Năm nay')),
-                        ],
-                        onChanged: (v) {
-                          if (v != null) {
-                            setState(() => searchDate = v);
-                            search(submittedQuery);
-                          }
-                        },
-                      ),
-                      DropdownButton<int>(
-                        value: searchDuration,
-                        items: const [
-                          DropdownMenuItem(
-                            value: 0,
-                            child: Text('Mọi thời lượng'),
-                          ),
-                          DropdownMenuItem(
-                            value: 1,
-                            child: Text('Dưới 4 phút'),
-                          ),
-                          DropdownMenuItem(value: 3, child: Text('4–20 phút')),
-                          DropdownMenuItem(
-                            value: 2,
-                            child: Text('Trên 20 phút'),
-                          ),
-                        ],
-                        onChanged: (v) {
-                          if (v != null) {
-                            setState(() => searchDuration = v);
-                            search(submittedQuery);
-                          }
-                        },
-                      ),
-                    ],
-                  ),
-                const SizedBox(height: 14),
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    spacing: 8,
-                    children:
-                        {
-                              'Dành cho bạn': '@forYou',
-                              'Việt Nam': '@vn',
-                              'Thế giới': '@world',
-                              'Âm nhạc': 'nhạc lofi Việt Nam',
-                              'Công nghệ': 'công nghệ',
-                              'Thiên nhiên': 'nature documentary 4k',
-                            }.entries
-                            .map(
-                              (e) => ChoiceChip(
-                                showCheckmark: false,
-                                label: Text(
-                                  e.key,
-                                  style: TextStyle(
-                                    color: topic == e.key
-                                        ? Colors.black
-                                        : Colors.white,
-                                  ),
-                                ),
-                                selected: topic == e.key,
-                                onSelected: (_) {
-                                  setState(() => topic = e.key);
-                                  if (e.value.startsWith('@')) {
-                                    loadFeed(mode: e.value.substring(1));
-                                  } else {
-                                    search(e.value);
-                                  }
-                                },
-                              ),
-                            )
-                            .toList(),
-                  ),
-                ),
-                const SizedBox(height: 22),
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        isFeed ? topic : 'Kết quả tìm kiếm',
-                        style: const TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                    const Spacer(),
-                    if (loading)
-                      const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      ),
-                  ],
-                ),
-              ],
+  Widget discover({bool facebookOnly = false}) => ListView(
+    padding: const EdgeInsets.symmetric(vertical: 16),
+    children: [
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              facebookOnly ? 'Video Facebook' : 'Xem theo cách của bạn',
+              style: Theme.of(context).textTheme.headlineSmall,
             ),
-          ),
-        ),
-        if (error != null) SliverToBoxAdapter(child: errorCard(error!)),
-        if (!loading && videos.isEmpty && error == null)
-          const SliverToBoxAdapter(
-            child: Padding(
-              padding: EdgeInsets.all(24),
-              child: Text('Không có kết quả. Thử từ khóa khác.'),
+            const SizedBox(height: 12),
+            VideoSearchBox(controller: searchController, onSearch: search),
+            const SizedBox(height: 8),
+            const Text(
+              'Dán link Facebook để xem trong Diu Túp. Link và tìm kiếm YouTube sẽ mở bằng YouTube chính thức.',
             ),
-          ),
-        SliverPadding(
-          padding: const EdgeInsets.symmetric(horizontal: 0),
-          sliver: SliverLayoutBuilder(
-            builder: (c, b) {
-              final n = b.crossAxisExtent >= 1100
-                  ? 4
-                  : b.crossAxisExtent >= 800
-                  ? 3
-                  : b.crossAxisExtent >= 550
-                  ? 2
-                  : 1;
-              return SliverGrid(
-                delegate: SliverChildBuilderDelegate(
-                  (c, i) => videoCard(videos[i]),
-                  childCount: videos.length,
+            const SizedBox(height: 16),
+            if (!facebookOnly) ...[
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.account_circle_outlined),
+                title: const Text('YouTube của bạn'),
+                subtitle: const Text(
+                  'Google · Kênh đăng ký, playlist và video đã thích',
                 ),
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: n,
-                  crossAxisSpacing: 16,
-                  mainAxisSpacing: 12,
-                  mainAxisExtent:
-                      (b.crossAxisExtent - (n - 1) * 16) / n * 9 / 16 +
-                      140 * MediaQuery.textScalerOf(context).scale(1),
-                ),
-              );
-            },
-          ),
-        ),
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              children: [
-                if (pageError != null)
-                  Text(
-                    pageError!,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(color: muted),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: showYoutubeAccount,
+              ),
+              Wrap(
+                spacing: 8,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: () =>
+                        openOfficial(Uri.https('www.youtube.com', '/')),
+                    icon: const Icon(Icons.open_in_new),
+                    label: const Text('Mở YouTube'),
                   ),
-                if (moreLoading)
-                  const Padding(
-                    padding: EdgeInsets.all(16),
-                    child: CircularProgressIndicator(),
-                  )
-                else if (!loading)
-                  TextButton.icon(
-                    onPressed: hasMore
-                        ? loadMore
-                        : () => isFeed ? loadFeed() : search(submittedQuery),
-                    icon: Icon(hasMore ? Icons.expand_more : Icons.refresh),
-                    label: Text(
-                      hasMore
-                          ? 'Tải tiếp video'
-                          : 'Đã hết nguồn hiện tại · Làm mới',
-                    ),
+                  OutlinedButton(
+                    onPressed: () =>
+                        openOfficial(Uri.https('www.youtube.com', '/shorts')),
+                    child: const Text('Shorts'),
                   ),
-              ],
+                  OutlinedButton(
+                    onPressed: () =>
+                        openOfficial(OfficialYoutube.destination('karaoke')),
+                    child: const Text('Karaoke'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+            ],
+            const Text(
+              'Facebook gần đây',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
-          ),
+          ],
         ),
-      ],
-    ),
+      ),
+      if (history.where((v) => isFacebookLink('${v['id']}')).isEmpty)
+        const Padding(
+          padding: EdgeInsets.all(16),
+          child: Text('Dán một liên kết Facebook công khai để bắt đầu.'),
+        ),
+      ...history
+          .where((v) => isFacebookLink('${v['id']}'))
+          .take(12)
+          .map(videoRow),
+    ],
   );
+
   Widget library(bool later) {
     final libraryQuery = (later ? savedController : historyController).text;
     final list = (later ? saved : history).where((v) {
@@ -3027,6 +2518,17 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
       const SizedBox(height: 24),
       ListTile(
         contentPadding: EdgeInsets.zero,
+        leading: const Icon(Icons.account_circle_outlined),
+        title: const Text('Tài khoản YouTube'),
+        subtitle: const Text(
+          'Đăng nhập Google · Kênh đăng ký, playlist, đã thích',
+        ),
+        onTap: () => Navigator.of(context).push(
+          MaterialPageRoute<void>(builder: (_) => const YoutubeAccountPage()),
+        ),
+      ),
+      ListTile(
+        contentPadding: EdgeInsets.zero,
         leading: checkingUpdate
             ? const SizedBox(
                 width: 24,
@@ -3048,23 +2550,6 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
         ),
         onTap: checkingUpdate ? null : updateApp,
       ),
-      SwitchListTile(
-        contentPadding: EdgeInsets.zero,
-        title: const Text('Đề xuất theo thói quen xem'),
-        subtitle: const Text(
-          'Xử lý trên máy: thời gian xem thực tế, video bỏ qua và xem sau. Có thể tắt bất cứ lúc nào.',
-        ),
-        value: profile.enabled,
-        onChanged: (value) async {
-          setState(() {
-            profile.enabled = value;
-            shortsProfile.enabled = value;
-          });
-          await command('musicAuto', {'enabled': value});
-          await saveProfile();
-          await invalidateFeedCache();
-        },
-      ),
       ListTile(
         contentPadding: EdgeInsets.zero,
         leading: const Icon(Icons.delete_outline),
@@ -3072,7 +2557,7 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
         onTap: clearViewingData,
       ),
       const Text(
-        'Sở thích không được gửi tới máy chủ riêng. Chất lượng tự động tiết kiệm dữ liệu: ưu tiên 480p trên dữ liệu SIM và mức cao nhất tương thích trên Wi-Fi. Bạn có thể chọn chất lượng khác trong trình phát. Media chỉ được tải trước trên mạng không tính dung lượng.',
+        'Video YouTube phát bằng YouTube chính thức. Trình phát Facebook tự động tiết kiệm dữ liệu: ưu tiên 480p trên dữ liệu SIM và mức cao nhất tương thích trên Wi-Fi. Bạn có thể chọn chất lượng khác trong trình phát. Media chỉ được tải trước trên mạng không tính dung lượng.',
         style: TextStyle(color: muted, fontSize: 12, height: 1.5),
       ),
       ListTile(
@@ -3193,25 +2678,8 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
             ? watchPage()
             : [
                 discover,
-                () => ShortsPage(
-                  open: (v) => open(v, fromStart: true, asShort: true),
-                  surface: videoSurface,
-                  activeId: active?['id'],
-                  activeVideo: active,
-                  onChannel: openChannel,
-                  ready: !resolving && state['ready'] == true,
-                  playing: state['playing'] == true,
-                  toggle: () =>
-                      command(state['playing'] == true ? 'pause' : 'play'),
-                  save: toggleSave,
-                  settings: playbackOptions,
-                  profile: shortsProfile,
-                  playbackError: error ?? state['error'] as String?,
-                  position: (state['position'] as num? ?? 0).toInt(),
-                  duration: (state['duration'] as num? ?? 0).toInt(),
-                  onSeek: (ms) => command('seek', {'position': ms}),
-                ),
-                karaokePage,
+                () => discover(),
+                () => discover(facebookOnly: true),
                 libraryPage,
                 settings,
               ][tab](),
@@ -3264,11 +2732,11 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
                 ),
                 NavigationDestination(
                   icon: Icon(Icons.play_circle_outline),
-                  label: 'Shorts',
+                  label: 'YouTube',
                 ),
                 NavigationDestination(
-                  icon: Icon(Icons.mic_none),
-                  label: 'Karaoke',
+                  icon: Icon(Icons.facebook),
+                  label: 'Facebook',
                 ),
                 NavigationDestination(
                   icon: Icon(Icons.video_library_outlined),
