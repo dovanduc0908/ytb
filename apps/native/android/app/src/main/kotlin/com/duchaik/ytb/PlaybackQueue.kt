@@ -23,7 +23,7 @@ class PlaybackQueue(private val service: PlaybackService) {
     fun replace(raw: List<Map<String,Any?>>, mode: Int = repeat) {
         invalidate(); error=null; repeat=mode.coerceIn(0,2)
         val seen=mutableSetOf<String>()
-        items=raw.take(1000).filter { val id=it["id"] as? String ?: "";Regex("^[A-Za-z0-9_-]{11}$").matches(id)&&seen.add(id) }.map { v -> v.filterKeys { it in listOf("id","title","author","thumbnail","duration","channelId","views","category","autoMusic") } }.toMutableList()
+        items=raw.take(1000).map { it + ("id" to MediaIdentity.canonical(it["id"] as? String ?: "")) }.filter { val id=it["id"] as? String ?: "";MediaIdentity.valid(id)&&seen.add(id) }.map { v -> v.filterKeys { it in listOf("id","title","author","thumbnail","duration","channelId","views","category","autoMusic") } }.toMutableList()
         save()
         if(service.player.playbackState==androidx.media3.common.Player.STATE_ENDED && !service.timerExpired && !shorts)advance()
     }

@@ -78,13 +78,13 @@ class TvReceiverActivity:Activity() {
         if(!allowed)return JSONObject().put("error","Cần ghép TV")
         val args=request.optJSONObject("args")?:JSONObject()
         if(method=="load"){
-            val id=args.getString("id");require(Regex("^[A-Za-z0-9_-]{11}$").matches(id))
+            val id=args.getString("id");require(MediaIdentity.valid(id))
             val epoch=ui{++loadEpoch}
             ui { resolving=true;pending=args;PlaybackService.current?.lastError=null;PlaybackService.current?.timerExpired=false }
             resolver.execute {
                 try {
                     val media=OnDeviceSource.shared(this).resolveForPlayback(id)
-                    ui{if(epoch==loadEpoch&&!closed){val s=PlaybackService.current!!;if(s.timerExpired){resolving=false;pending=null;return@ui};s.queue.invalidate();s.queue.shorts=args.optBoolean("isShort");@Suppress("UNCHECKED_CAST") val tracks=media["tracks"] as List<Map<String,Any?>>;s.loadSources(tracks,id,media["title"] as? String,media["author"] as? String,args.optLong("position"),media);notice.visibility=android.view.View.GONE;resolving=false;pending=null}}
+                    ui{if(epoch==loadEpoch&&!closed){val s=PlaybackService.current!!;if(s.timerExpired){resolving=false;pending=null;return@ui};s.queue.invalidate();s.queue.shorts=args.optBoolean("isShort");@Suppress("UNCHECKED_CAST") val tracks=media["tracks"] as List<Map<String,Any?>>;s.loadSources(tracks,media["id"] as String,media["title"] as? String,media["author"] as? String,args.optLong("position"),media);notice.visibility=android.view.View.GONE;resolving=false;pending=null}}
                 }catch(_:Exception){ui{if(epoch==loadEpoch){resolving=false;PlaybackService.current?.lastError="Không tải được video trên TV. Hãy thử lại."}}}
             }
             return JSONObject().put("result",JSONObject.NULL)
@@ -93,13 +93,16 @@ class TvReceiverActivity:Activity() {
             val s=PlaybackService.current?:throw IllegalStateException();val p=s.player
             when(method){
                 "musicAuto" -> { if(args.has("enabled")) s.musicQueue.setEnabled(args.optBoolean("enabled"));if(args.optBoolean("clear")) s.musicQueue.clearHistory();if(args.has("hideId")) s.musicQueue.hide(args.getString("hideId"));null }
-                "state" -> mapOf("metadata" to s.metadata,"audioBitrate" to s.audioBitrate,"audioGain" to s.audioGain,"audioUnderruns" to s.audioUnderruns,"isMusic" to s.musicQueue.music,"musicAuto" to s.musicQueue.enabled,"musicLearning" to s.musicQueue.learningCount,"musicError" to s.musicQueue.error,"queueError" to s.queue.error,"id" to (pending?.optString("id") ?: p.currentMediaItem?.mediaId),"title" to (pending?.optString("title") ?: p.mediaMetadata.title?.toString()),"author" to (pending?.optString("author") ?: p.mediaMetadata.artist?.toString()),"playing" to p.isPlaying,"position" to p.currentPosition,"duration" to p.duration.coerceAtLeast(0),"buffered" to p.bufferedPosition,"speed" to p.playbackParameters.speed,"height" to p.videoSize.height,"width" to p.videoSize.width,"ready" to (!resolving && p.playbackState==Player.STATE_READY),"buffering" to (resolving || p.playbackState==Player.STATE_BUFFERING),"ended" to (p.playbackState==Player.STATE_ENDED),"queueRevision" to s.queue.revision,"qualities" to s.sources.map{it["height"]},"error" to s.lastError,"timerExpired" to s.timerExpired,"timerMs" to (s.deadline-android.os.SystemClock.elapsedRealtime()).coerceAtLeast(0),"firstFrameMs" to s.firstFrameMs,"frameSerial" to s.frameSerial,"remote" to true,"userActionRevision" to s.userActionRevision)
-                "play" -> {if(p.playbackState==Player.STATE_ENDED)p.seekTo(0);s.timerExpired=false;p.play();null}
-                "pause" -> {loadEpoch++;resolving=false;pending=null;s.queue.invalidate();p.pause();null}
-                "seek" -> {p.seekTo(args.optLong("position").coerceIn(0,p.duration.coerceAtLeast(0)));null}
-                "speed" -> {val speed=args.optDouble("value",1.0).toFloat();require(speed in .25f..3.5f);p.setPlaybackSpeed(speed);null}
+                "state" -> mapOf("audioOnly" to s.audioOnly, "stopAtEnd" to s.stopAtEnd, "qualityMode" to s.qualityMode, "captionTracks" to s.captionTracks.map { it.filterKeys { key -> key != "url" } }, "captionSelected" to s.captionSelected, "captionStatus" to s.captionStatus, "captionText" to s.captionText(), "chapters" to s.chapters, "chaptersLoading" to s.chaptersLoading, "metadata" to s.metadata,"audioBitrate" to s.audioBitrate,"audioGain" to s.audioGain,"audioUnderruns" to s.audioUnderruns,"isMusic" to s.musicQueue.music,"musicAuto" to s.musicQueue.enabled,"musicLearning" to s.musicQueue.learningCount,"musicError" to s.musicQueue.error,"queueError" to s.queue.error,"id" to (pending?.optString("id") ?: p.currentMediaItem?.mediaId),"title" to (pending?.optString("title") ?: p.mediaMetadata.title?.toString()),"author" to (pending?.optString("author") ?: p.mediaMetadata.artist?.toString()),"playing" to p.isPlaying,"position" to p.currentPosition,"duration" to p.duration.coerceAtLeast(0),"buffered" to p.bufferedPosition,"speed" to p.playbackParameters.speed,"height" to p.videoSize.height,"width" to p.videoSize.width,"ready" to (!resolving && p.playbackState==Player.STATE_READY),"buffering" to (resolving || p.playbackState==Player.STATE_BUFFERING),"ended" to (p.playbackState==Player.STATE_ENDED),"queueRevision" to s.queue.revision,"qualities" to s.sources.map{it["height"]},"error" to s.lastError,"timerExpired" to s.timerExpired,"timerMs" to (s.deadline-android.os.SystemClock.elapsedRealtime()).coerceAtLeast(0),"firstFrameMs" to s.firstFrameMs,"frameSerial" to s.frameSerial,"remote" to true,"userActionRevision" to s.userActionRevision)
+                "repeat" -> {s.queue.setRepeat(args.optInt("mode"));null}
+                "audioOnly" -> {s.setAudioOnly(args.optBoolean("enabled"));null}
+                "caption" -> {s.chooseCaption(args.optInt("id",-1));null}
+                "play" -> {s.userActionRevision++;if(p.playbackState==Player.STATE_ENDED)p.seekTo(0);s.timerExpired=false;p.play();null}
+                "pause" -> {s.userActionRevision++;loadEpoch++;resolving=false;pending=null;s.queue.invalidate();p.pause();null}
+                "seek" -> {s.userActionRevision++;p.seekTo(args.optLong("position").coerceIn(0,p.duration.coerceAtLeast(0)));null}
+                "speed" -> {val speed=args.optDouble("value",1.0).toFloat();require(speed in .25f..4f);p.setPlaybackSpeed(speed);null}
                 "quality" -> {s.selectQuality(args.optInt("height"));null}
-                "timer" -> {s.setSleepTimer(args.optLong("milliseconds").coerceAtLeast(0));null}
+                "timer" -> {s.setSleepTimer(args.optLong("milliseconds").coerceAtLeast(-1));null}
                 "next" -> {s.queue.advance(true);null}
                 "previous" -> {s.queue.back();null}
                 "queue" -> {@Suppress("UNCHECKED_CAST") val items=fromJson(args.opt("items")) as? List<Map<String,Any?>>;if(items!=null){require(!args.has("revision")||args.optLong("revision")==s.queue.revision);s.queue.replace(items,args.optInt("repeat",s.queue.repeat))};mapOf("items" to s.queue.items,"repeat" to s.queue.repeat,"revision" to s.queue.revision)}

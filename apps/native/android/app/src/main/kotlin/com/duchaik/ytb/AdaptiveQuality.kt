@@ -5,7 +5,7 @@ object AdaptiveQuality {
     data class Variant(val height: Int, val bitrate: Long)
     fun dataSaverVariants(variants: List<Variant>, unmetered: Boolean): List<Variant> {
         val valid = variants.filter { it.height > 0 }.sortedBy { it.height }
-        val withinLimit = valid.filter { it.height <= if (unmetered) 480 else 360 }
+        val withinLimit = valid.filter { unmetered || it.height <= 480 }
         return withinLimit.ifEmpty { valid.take(1) }
     }
     fun candidate(variants: List<Variant>, bandwidth: Long, audioBitrate: Long, speed: Float): Int? {
@@ -14,6 +14,12 @@ object AdaptiveQuality {
         if (known.size < 2) return null
         val budget = (bandwidth * .70 / speed.coerceAtLeast(1f) - audioBitrate.coerceAtLeast(0)).toLong()
         return (known.filter { it.bitrate <= budget }.maxByOrNull { it.height } ?: known.first()).height
+    }
+    fun bufferCandidate(variants: List<Variant>, selected: Int, bufferedMs: Long, buffering: Boolean): Int? {
+        val heights = variants.map { it.height }.distinct().sorted()
+        if (buffering && bufferedMs < 3000) return heights.lastOrNull { it < selected }
+        if (!buffering && bufferedMs >= 30000) return heights.firstOrNull { it > selected }
+        return null
     }
     class Decider {
         private var candidate = 0

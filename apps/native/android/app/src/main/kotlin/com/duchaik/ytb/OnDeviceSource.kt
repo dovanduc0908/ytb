@@ -24,7 +24,11 @@ class OnDeviceSource(private val context: Context) : MethodChannel.MethodCallHan
         private var instance: OnDeviceSource? = null
         @Synchronized fun shared(context: Context): OnDeviceSource = instance ?: OnDeviceSource(context.applicationContext).also { instance=it }
     }
-    fun resolveForPlayback(id: String): Map<String,Any?> = resolve(id)
+    fun resolveForPlayback(id: String): Map<String,Any?> = if (MediaIdentity.facebook(id)) { init(); resolveFacebook(id) } else resolve(id)
+    fun refreshForPlayback(id: String): Map<String, Any?> {
+        synchronized(cache) { cache.remove(MediaIdentity.canonical(id)) }
+        return resolveForPlayback(id)
+    }
     fun resolveForRecommendation(id: String): Map<String,Any?> {
         val result = resolve(id, true)
         if (!result["category"].toString().isNullOrBlank() && result["category"] != null) return result
@@ -196,21 +200,16 @@ class OnDeviceSource(private val context: Context) : MethodChannel.MethodCallHan
         val host = uri.host?.lowercase() ?: ""
         require(uri.scheme == "https" && uri.userInfo == null && uri.port == -1 &&
             (host == "fb.watch" || host == "facebook.com" || host.endsWith(".facebook.com"))) { "Hãy dùng liên kết HTTPS của Facebook." }
+        val key = MediaIdentity.canonical(url)
+        synchronized(cache) { cache[key]?.let { if (it.first > SystemClock.elapsedRealtime()) return it.second + ("cacheHit" to true) } }
         val data = execute(url)
-        val formats = data.optJSONArray("formats") ?: JSONArray()
-        val videos = (0 until formats.length()).mapNotNull { formats.optJSONObject(it) }.filter {
-            val stream = runCatching { URI(it.optString("url")) }.getOrNull()
-            val streamHost = stream?.host?.lowercase() ?: ""
-            stream?.scheme == "https" && (streamHost == "fbcdn.net" || streamHost.endsWith(".fbcdn.net") || streamHost.endsWith(".facebook.com")) &&
-                !it.optBoolean("has_drm", false) && it.optString("protocol") == "https" &&
-                it.optString("vcodec") != "none" && it.optString("acodec") != "none" && it.optString("ext") == "mp4"
-        }.sortedBy { it.optInt("height") }
-        require(videos.isNotEmpty()) { "Video chưa có nguồn MP4 công khai tương thích." }
-        val tracks = videos.map { v -> mapOf("height" to v.optInt("height", 360).coerceAtLeast(1),
-            "bitrate" to (v.optDouble("tbr", 0.0) * 1000).toInt(), "url" to v.optString("url"),
-            "mime" to "video/mp4", "headers" to headers(v), "audioGain" to 1.0) }
-        return card(data) + mapOf("id" to url, "tracks" to tracks, "onDevice" to true, "engine" to "facebook")
+        val tracks = FacebookFormats.tracks(data, ::supported)
+        val result = card(data) + mapOf("id" to MediaIdentity.canonical(url), "source" to "facebook", "canonicalUrl" to MediaIdentity.canonical(url),
+            "tracks" to tracks, "onDevice" to true, "engine" to "facebook", "extendedQualities" to true)
+        synchronized(cache) { cache[key] = Pair(SystemClock.elapsedRealtime() + sourceTtl(result), result) }
+        return result
     }
+
     private fun safeUrl(raw: String): Boolean = try {
         val u=URI(raw);u.scheme=="https" && (u.host.endsWith(".googlevideo.com") || u.host.endsWith(".youtube.com"))
     } catch (_:Exception) {false}
@@ -222,7 +221,7 @@ class OnDeviceSource(private val context: Context) : MethodChannel.MethodCallHan
         val codec=j.optString("vcodec")
         val mime=when {codec.startsWith("avc")->"video/avc";codec.startsWith("vp9")||codec.startsWith("vp09")->"video/x-vnd.on2.vp9";else->return false}
         return MediaCodecList(MediaCodecList.REGULAR_CODECS).codecInfos.filter{!it.isEncoder}.any { c ->
-            try {c.getCapabilitiesForType(mime).videoCapabilities.isSizeSupported(j.optInt("width"),j.optInt("height"))}catch(_:Exception){false}
+            try {c.getCapabilitiesForType(mime).videoCapabilities.let { caps -> val fps = j.optDouble("fps", 0.0); if (fps > 0) caps.areSizeAndRateSupported(j.optInt("width"), j.optInt("height"), fps) else caps.isSizeSupported(j.optInt("width"), j.optInt("height")) }}catch(_:Exception){false}
         }
     }
 }

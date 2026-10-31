@@ -78,7 +78,7 @@ class TvConnection(private val context: Context) : MethodChannel.MethodCallHandl
     private fun finishScan(){scan?.let{runCatching{nsd.stopServiceDiscovery(it)}};scan=null;scanResult?.success(found.values.toList());scanResult=null}
     fun player(call:MethodCall,result:MethodChannel.Result):Boolean {
         val host=address?:return false
-        if(call.method !in setOf("state","load","play","pause","seek","speed","quality","timer","queue","next","previous","sources","musicAuto"))return false
+        if(call.method !in setOf("state","load","play","pause","seek","speed","quality","timer","queue","next","previous","sources","musicAuto","repeat","audioOnly","caption")){result.error("TV_UNSUPPORTED","Chức năng này chưa hỗ trợ trên TV. Ngắt TV để dùng trên điện thoại.",null);return true}
         if(call.method=="sources"){result.success(null);return true}
         val epoch=generation
         val args=JSONObject()

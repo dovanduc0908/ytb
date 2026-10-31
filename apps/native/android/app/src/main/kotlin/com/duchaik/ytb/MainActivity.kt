@@ -40,6 +40,7 @@ class MainActivity: FlutterActivity() {
     private var resumed = false
     private var fullscreen = false
     private var orientationLocked = false
+    private val orientationPolicy = OrientationPolicy()
     private var fullscreenVolume: Int? = null
     private var fullscreenBrightness: Float? = null
     private fun saveFullscreenSettings() {
@@ -63,13 +64,41 @@ class MainActivity: FlutterActivity() {
         fullscreenBrightness = null
     }
     private fun updateFullscreenOrientation() {
-        if (!fullscreen || orientationLocked) return
-        val size = PlaybackService.current?.player?.videoSize
-        val portrait = size != null && size.width > 0 && size.height > 0 &&
-            size.width * size.pixelWidthHeightRatio < size.height
-        val orientation = if (portrait) android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
+        if (!fullscreen || orientationLocked || (Build.VERSION.SDK_INT >= 26 && isInPictureInPictureMode)) return
+        val orientation = if (orientationPolicy.wantsPortrait()) android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
             else android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
         if (requestedOrientation != orientation) requestedOrientation = orientation
+    }
+    private fun updateVideoGeometry() {
+        val p = observedPlayer ?: return
+        val id = p.currentMediaItem?.mediaId.orEmpty()
+        orientationPolicy.media(id)
+        val size = p.videoSize
+        orientationPolicy.size(id, size.width, size.height, size.pixelWidthHeightRatio)
+        updateFullscreenOrientation()
+        if (Build.VERSION.SDK_INT >= 26 && isInPictureInPictureMode) setPictureInPictureParams(pipParams())
+    }
+    private fun pipParams(): PictureInPictureParams {
+        val size = PlaybackService.current?.player?.videoSize
+        val ratio = if (size != null && size.width > 0 && size.height > 0)
+            (size.width * size.pixelWidthHeightRatio / size.height).coerceIn(0.42f, 2.39f) else 16f / 9f
+        return PictureInPictureParams.Builder().setAspectRatio(Rational((ratio * 1000).toInt(), 1000)).build()
+    }
+    private val videoListener = object : Player.Listener {
+        override fun onVideoSizeChanged(videoSize: VideoSize) { updateVideoGeometry() }
+        override fun onMediaItemTransition(item: MediaItem?, reason: Int) {
+            orientationPolicy.media(item?.mediaId.orEmpty())
+        }
+    }
+    private var observedPlayer: androidx.media3.exoplayer.ExoPlayer? = null
+    private fun observePlayer() {
+        val next = PlaybackService.current?.player
+        if (observedPlayer !== next) {
+            observedPlayer?.removeListener(videoListener)
+            observedPlayer = next
+            next?.addListener(videoListener)
+            updateVideoGeometry()
+        }
     }
     private var bridge: MethodChannel? = null
     private val lifecycleHandler = Handler(Looper.getMainLooper())
@@ -84,6 +113,7 @@ class MainActivity: FlutterActivity() {
     }
     override fun onPictureInPictureModeChanged(inPip: Boolean, config: Configuration) {
         super.onPictureInPictureModeChanged(inPip, config)
+        if (!inPip) updateFullscreenOrientation()
         bridge?.invokeMethod("pipChanged", inPip)
     }
     override fun onResume() {
@@ -92,7 +122,7 @@ class MainActivity: FlutterActivity() {
         lifecycleHandler.post { ensureService() }
     }
     override fun onPause() { resumed = false; super.onPause() }
-    override fun onDestroy() { restoreFullscreenSettings(); tv?.release(); tv=null; voiceResult?.success(null);voiceResult=null;super.onDestroy() }
+    override fun onDestroy() { observedPlayer?.removeListener(videoListener); observedPlayer = null; restoreFullscreenSettings(); tv?.release(); tv=null; voiceResult?.success(null);voiceResult=null;super.onDestroy() }
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "ytb/update").setMethodCallHandler(AppUpdater(this))
@@ -132,6 +162,8 @@ class MainActivity: FlutterActivity() {
                 if (!enabled && fullscreen) restoreFullscreenSettings()
                 fullscreen = enabled
                 orientationLocked = false
+                orientationPolicy.enter(enabled)
+                observePlayer()
                 if (enabled) updateFullscreenOrientation()
                 else requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
                 val controller = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
@@ -140,8 +172,17 @@ class MainActivity: FlutterActivity() {
                 else controller.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
                 result.success(null); return@setMethodCallHandler
             }
+            if (call.method == "orientation") {
+                try {
+                    orientationPolicy.choose(call.argument<String>("mode") ?: "landscape")
+                    updateFullscreenOrientation()
+                    result.success(orientationPolicy.mode)
+                } catch (e: IllegalArgumentException) { result.error("ORIENTATION", "Hướng không hợp lệ", null) }
+                return@setMethodCallHandler
+            }
             if (call.method == "lock") {
                 orientationLocked = call.argument<Boolean>("enabled") == true
+                orientationPolicy.lock(orientationLocked)
                 if (orientationLocked) requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LOCKED
                 else updateFullscreenOrientation()
                 result.success(null); return@setMethodCallHandler
@@ -186,7 +227,12 @@ class MainActivity: FlutterActivity() {
             if (call.method == "savedProgress") {
                 val id = call.argument<String>("id") ?: ""
                 val prefs = getSharedPreferences("view-progress", Context.MODE_PRIVATE)
-                result.success(if (prefs.contains(id)) prefs.getLong(id, 0L) else null)
+                val canonical = MediaIdentity.canonical(id)
+                if (!prefs.contains(canonical)) {
+                    val legacy = prefs.all.entries.firstOrNull { it.value is Long && MediaIdentity.canonical(it.key) == canonical }
+                    if (legacy != null) prefs.edit().putLong(canonical, legacy.value as Long).remove(legacy.key).apply()
+                }
+                result.success(if (prefs.contains(canonical)) prefs.getLong(canonical, 0L) else null)
                 return@setMethodCallHandler
             }
             if (call.method == "discardedVideo") {
@@ -218,6 +264,7 @@ class MainActivity: FlutterActivity() {
             if(tv?.player(call,result)==true) return@setMethodCallHandler
             val service = PlaybackService.current
             if (service == null) { ensureService(); result.error("NOT_READY", "Player đang khởi tạo", null); return@setMethodCallHandler }
+            observePlayer()
             val p = service.player
             try {
                 when(call.method) {
@@ -253,7 +300,7 @@ class MainActivity: FlutterActivity() {
                     }
                     "play" -> { service.userActionRevision++; if(p.playbackState == Player.STATE_ENDED) p.seekTo(0); p.play(); service.timerExpired = false; result.success(null) }
                     "pause" -> { service.userActionRevision++; service.queue.invalidate(); service.saveProgress(); p.pause(); result.success(null) }
-                    "seek" -> { p.seekTo((call.argument<Number>("position")?.toLong() ?: 0L).coerceAtLeast(0)); result.success(null) }
+                    "seek" -> { service.userActionRevision++; p.seekTo((call.argument<Number>("position")?.toLong() ?: 0L).coerceAtLeast(0)); result.success(null) }
                     "speed" -> {
                         val rate = call.argument<Number>("value")!!.toFloat()
                         require(rate >= .25f && rate <= 4f)
@@ -270,15 +317,16 @@ class MainActivity: FlutterActivity() {
                         service.selectQuality(call.argument<Number>("height")!!.toInt())
                         result.success(null)
                     }
+                    "enhancement" -> { service.setEnhancement(call.argument<String>("mode") ?: "off"); result.success(null) }
                     "audioOnly" -> { service.setAudioOnly(call.argument<Boolean>("enabled") == true); result.success(null) }
                     "timer" -> { service.setSleepTimer(call.argument<Number>("milliseconds")!!.toLong()); result.success(null) }
                     "pip" -> {
                         if(Build.VERSION.SDK_INT >= 26 && packageManager.hasSystemFeature("android.software.picture_in_picture")) {
-                            result.success(enterPictureInPictureMode(PictureInPictureParams.Builder().setAspectRatio(Rational(16,9)).build()))
+                            result.success(enterPictureInPictureMode(pipParams()))
                         } else result.success(false)
                     }
                     "state" -> {
-                        updateFullscreenOrientation()
+
                         val heights = service.sources.map{(it["height"] as Number).toInt()}.toSet()
                         val keepScreenOn = WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
                         val alreadyOn = window.attributes.flags and keepScreenOn != 0
@@ -286,7 +334,7 @@ class MainActivity: FlutterActivity() {
                             if(p.isPlaying) window.addFlags(keepScreenOn)
                             else window.clearFlags(keepScreenOn)
                         }
-                        result.success(mapOf("audioOnly" to service.audioOnly, "stopAtEnd" to service.stopAtEnd, "queueError" to service.queue.error, "metadata" to service.metadata, "musicAuto" to service.musicQueue.enabled,
+                        result.success(mapOf("fullscreen" to fullscreen, "orientationMode" to orientationPolicy.mode, "orientationLocked" to orientationLocked, "actualLandscape" to (resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE), "enhancement" to service.enhancementMode, "enhancementStatus" to service.enhancementStatus, "networkPolicy" to (if (StartupCache.wifi(this)) "wifi" else "cellular"), "renderedFrames" to service.player.videoDecoderCounters?.renderedOutputBufferCount, "droppedFrames" to service.player.videoDecoderCounters?.droppedBufferCount, "aspectRatio" to (p.videoSize.let { if (it.width > 0 && it.height > 0) it.width * it.pixelWidthHeightRatio / it.height else 16f/9f }).toDouble(), "audioOnly" to service.audioOnly, "stopAtEnd" to service.stopAtEnd, "queueError" to service.queue.error, "metadata" to service.metadata, "musicAuto" to service.musicQueue.enabled,
                             "musicLearning" to service.musicQueue.learningCount, "isMusic" to service.musicQueue.music, "musicError" to service.musicQueue.error,
                             "captionTracks" to service.captionTracks.map { it.filterKeys { key -> key != "url" } }, "captionSelected" to service.captionSelected, "captionStatus" to service.captionStatus, "captionText" to service.captionText(), "chapters" to service.chapters, "chaptersLoading" to service.chaptersLoading, "qualityMode" to service.qualityMode, "bandwidthSamples" to service.bandwidthSamples,
                             "audioBitrate" to service.audioBitrate, "audioGain" to service.audioGain.toDouble(), "audioUnderruns" to service.audioUnderruns,
@@ -315,9 +363,9 @@ class VideoView(context: Context): PlatformView {
     private val view = (android.view.LayoutInflater.from(context).inflate(R.layout.video_surface, null) as PlayerView).apply { useController=false; setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING) }
     private val handler = Handler(Looper.getMainLooper())
     private val attach = object: Runnable {
-        override fun run() { val p=PlaybackService.current?.player; if(view.player !== p) view.player=p; handler.postDelayed(this,1000) }
+        override fun run() { val p=PlaybackService.current?.player; if (current.get() === view && view.player !== p) view.player=p; handler.postDelayed(this,1000) }
     }
-    init { current = java.lang.ref.WeakReference(view); handler.post(attach) }
+    init { val old = current.get(); current = java.lang.ref.WeakReference(view); PlaybackService.current?.player?.let { PlayerView.switchTargetView(it, old, view) }; handler.post(attach) }
     override fun getView(): View = view
     override fun dispose() { handler.removeCallbacksAndMessages(null); view.player=null; if (current.get() === view) current.clear() }
 }

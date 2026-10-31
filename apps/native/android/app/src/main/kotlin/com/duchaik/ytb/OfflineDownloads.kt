@@ -31,32 +31,34 @@ object OfflineDownloads {
         val a = read(c); val out = JSONArray()
         for (i in 0 until a.length()) { val item = a.optJSONObject(i) ?: continue; if (item.optString("id") != id) out.put(item) }
         prefs(c).edit().putString("items", out.toString()).commit()
-        File(dir(c), "$id.video").delete(); File(dir(c), "$id.audio").delete()
+        File(dir(c), "${MediaIdentity.fileKey(id)}.video").delete(); File(dir(c), "${MediaIdentity.fileKey(id)}.audio").delete()
     }
     @Synchronized fun start(c: Context, metadata: Map<String, Any?>, tracks: List<Map<String, Any?>>, audioOnly: Boolean) {
         require(!running) { "Đang tải một video khác" }
         require(StartupCache.unmetered(c)) { "Chỉ tải khi dùng mạng không tính dung lượng" }
         require(metadata["isLive"] != true) { "Không hỗ trợ tải livestream" }
         val id = metadata["id"] as? String ?: ""
-        require(Regex("^[A-Za-z0-9_-]{11}$").matches(id)) { "Video không hợp lệ" }
+        require(MediaIdentity.valid(id)) { "Video không hợp lệ" }
         require(list(c).none { it["id"] == id }) { "Video đã được tải" }
         dir(c).listFiles()?.filter { it.name.endsWith(".part") }?.forEach { it.delete() }
         val used = dir(c).listFiles()?.sumOf { it.length() } ?: 0L
         require(used < LIMIT) { "Đã hết hạn mức 200 MiB" }
-        val selected = tracks.filter { (it["height"] as? Number)?.toInt()?.let { h -> h <= 360 } == true }.maxByOrNull { (it["height"] as Number).toInt() } ?: tracks.minByOrNull { (it["height"] as? Number)?.toInt() ?: Int.MAX_VALUE } ?: error("Không có nguồn tải")
+        val downloadable = tracks.filter { it["mime"] in listOf("video/mp4", "video/webm") }
+        val selected = downloadable.filter { (it["height"] as? Number)?.toInt()?.let { h -> h <= 480 } == true }.maxByOrNull { (it["height"] as Number).toInt() } ?: downloadable.minByOrNull { (it["height"] as? Number)?.toInt() ?: Int.MAX_VALUE } ?: error("Không có nguồn tải")
         val audio = selected["audioUrl"] as? String
-        require(!audio.isNullOrBlank()) { "Nguồn không có âm thanh riêng để tải" }
+        require(!audioOnly || !audio.isNullOrBlank()) { "Nguồn này chỉ hỗ trợ tải cả hình và tiếng" }
         running = true; cancel = false; bytes = 0; message = "Đang tải"
         val app = c.applicationContext
         worker.execute {
-            val videoTemp = File(dir(app), "$id.video.part"); val audioTemp = File(dir(app), "$id.audio.part")
+            val videoTemp = File(dir(app), "${MediaIdentity.fileKey(id)}.video.part"); val audioTemp = File(dir(app), "${MediaIdentity.fileKey(id)}.audio.part")
             try {
                 var remaining = LIMIT - used
                 fun fetch(url: String, headers: Map<String, String>, target: File) {
-                    val uri = Uri.parse(url); require(uri.scheme == "https" && uri.host?.endsWith(".googlevideo.com") == true) { "Nguồn tải không hợp lệ" }
+                    require(MediaIdentity.mediaUrl(url)) { "Nguồn tải không hợp lệ" }
                     val connection = URL(url).openConnection() as HttpURLConnection
                     try {
                         connection.connectTimeout = 15000; connection.readTimeout = 15000; headers.forEach { (k,v) -> connection.setRequestProperty(k,v) }
+                        connection.instanceFollowRedirects = false
                         require(connection.responseCode in 200..299) { "Nguồn tải không khả dụng" }
                         val length = connection.contentLengthLong
                         if (length > remaining) error("Video vượt quá dung lượng còn lại")
@@ -74,32 +76,32 @@ object OfflineDownloads {
                     } finally { connection.disconnect() }
                 }
                 @Suppress("UNCHECKED_CAST")
-                fetch(audio!!, selected["audioHeaders"] as? Map<String, String> ?: emptyMap(), audioTemp)
+                if (!audio.isNullOrBlank()) fetch(audio, selected["audioHeaders"] as? Map<String, String> ?: emptyMap(), audioTemp)
                 if (!audioOnly) {
                     @Suppress("UNCHECKED_CAST")
                     fetch(selected["url"] as String, selected["headers"] as? Map<String, String> ?: emptyMap(), videoTemp)
                 }
                 if (cancel) error("Đã hủy tải")
-                val audioFile = File(dir(app), "$id.audio"); check(audioTemp.renameTo(audioFile))
-                if (!audioOnly) check(videoTemp.renameTo(File(dir(app), "$id.video")))
+                val audioFile = File(dir(app), "${MediaIdentity.fileKey(id)}.audio"); if (!audio.isNullOrBlank()) check(audioTemp.renameTo(audioFile))
+                if (!audioOnly) check(videoTemp.renameTo(File(dir(app), "${MediaIdentity.fileKey(id)}.video")))
                 val item = JSONObject().put("id", id).put("title", metadata["title"] ?: "Video").put("author", metadata["author"] ?: "")
                     .put("duration", (metadata["duration"] as? Number)?.toLong() ?: 0).put("height", (selected["height"] as Number).toInt())
                     .put("mime", if (audioOnly) selected["audioMime"] else selected["mime"]).put("audioMime", selected["audioMime"])
-                    .put("audioOnly", audioOnly).put("size", bytes)
+                    .put("audioOnly", audioOnly).put("muxed", audio.isNullOrBlank()).put("source", metadata["source"] ?: "youtube").put("canonicalUrl", metadata["canonicalUrl"] ?: "").put("size", bytes)
                 synchronized(this) { val all = read(app); all.put(item); check(prefs(app).edit().putString("items", all.toString()).commit()) }
                 message = "Tải xong"
             } catch (e: Exception) {
-                message = e.message ?: "Không tải được"; File(dir(app), "$id.video").delete(); File(dir(app), "$id.audio").delete()
+                message = e.message ?: "Không tải được"; File(dir(app), "${MediaIdentity.fileKey(id)}.video").delete(); File(dir(app), "${MediaIdentity.fileKey(id)}.audio").delete()
             } finally { videoTemp.delete(); audioTemp.delete(); running = false }
         }
     }
     fun data(c: Context, id: String): Map<String, Any?> {
         val item = list(c).firstOrNull { it["id"] == id } ?: error("Không tìm thấy bản tải")
-        val audio = File(dir(c), "$id.audio"); val video = File(dir(c), "$id.video")
-        require(audio.isFile && (item["audioOnly"] == true || video.isFile)) { "Tệp tải không còn" }
+        val audio = File(dir(c), "${MediaIdentity.fileKey(id)}.audio"); val video = File(dir(c), "${MediaIdentity.fileKey(id)}.video")
+        require((item["muxed"] == true || audio.isFile) && (item["audioOnly"] == true || video.isFile)) { "Tệp tải không còn" }
         val audioOnly = item["audioOnly"] == true
         val track = mapOf("height" to item["height"], "bitrate" to 0, "url" to Uri.fromFile(if (audioOnly) audio else video).toString(), "mime" to item["mime"],
-            "audioUrl" to if (audioOnly) null else Uri.fromFile(audio).toString(), "audioMime" to item["audioMime"], "audioGain" to 1.0)
+            "audioUrl" to if (audioOnly || item["muxed"] == true) null else Uri.fromFile(audio).toString(), "audioMime" to item["audioMime"], "audioGain" to 1.0)
         return item + mapOf("tracks" to listOf(track), "offline" to true)
     }
 }

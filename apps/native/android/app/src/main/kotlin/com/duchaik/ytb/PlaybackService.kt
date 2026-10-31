@@ -42,6 +42,94 @@ class PlaybackService : MediaSessionService() {
     private var loadStarted = 0L
     private val metadataWorker = java.util.concurrent.Executors.newFixedThreadPool(3)
     private lateinit var bandwidthMeter: androidx.media3.exoplayer.upstream.DefaultBandwidthMeter
+    private var destroyed = false
+    private val networkCallback = object : android.net.ConnectivityManager.NetworkCallback() {
+        override fun onCapabilitiesChanged(network: android.net.Network, caps: android.net.NetworkCapabilities) {
+            handler.post {
+                if (destroyed) return@post
+                val wifi = caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) && !caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_CELLULAR)
+                if (lastWifi != wifi) {
+                    lastWifi = wifi
+                    OnDeviceSource.shared(applicationContext).cancelPrefetch()
+                    if (::player.isInitialized && sources.isNotEmpty() && metadata["offline"] != true) {
+                        qualityMode = 0; qualityDecider.reset()
+                        runCatching { applyQuality(0, player.currentPosition, player.playWhenReady) }
+                            .onFailure { lastError = "Chưa đổi được nguồn sau khi chuyển mạng. Hãy thử lại." }
+                    }
+                }
+            }
+        }
+    }
+    private var lastWifi: Boolean? = null
+    var enhancementMode = "off"; private set
+    var enhancementStatus = "off"; private set
+    private var enhancementSuspended = false
+    private var effectsKey = ""
+    private var recoveryAttempts = 0
+    private var recoveryEpoch = 0L
+    private var recovering = false
+    fun setEnhancement(mode: String) {
+        require(mode in setOf("off", "auto", "strong"))
+        enhancementMode = mode; enhancementSuspended = false; effectsKey = ""
+        getSharedPreferences("video-settings", MODE_PRIVATE).edit().putString("enhancement", mode).apply()
+        updateEnhancement()
+    }
+    private fun updateEnhancement() {
+        if (!::player.isInitialized) return
+        val f = player.videoFormat
+        val thermal = if (android.os.Build.VERSION.SDK_INT >= 29)
+            (getSystemService(android.content.Context.POWER_SERVICE) as android.os.PowerManager).currentThermalStatus else 0
+        val hdr = f?.colorInfo?.let { it.colorTransfer == C.COLOR_TRANSFER_ST2084 || it.colorTransfer == C.COLOR_TRANSFER_HLG } == true
+        val active = enhancementMode != "off" && !enhancementSuspended && thermal < 3 && !hdr && !audioOnly && !screenOffAudio && f != null
+        enhancementStatus = when {
+            enhancementMode == "off" -> "off"
+            hdr -> "HDR: giữ hình gốc"
+            thermal >= 3 -> "Tạm tắt do nhiệt độ"
+            enhancementSuspended -> "Tạm tắt để giữ phát mượt"
+            !active -> "Đang chờ hình"
+            else -> "Đang tăng cường"
+        }
+        val key = "$active:$enhancementMode:${f?.width}:${f?.height}"
+        if (key == effectsKey) return
+        effectsKey = key
+        val effects = mutableListOf<Effect>()
+        if (active && f != null) {
+            effects.add(DetailEnhancement(if (enhancementMode == "strong") .7f else .35f))
+            val display = resources.displayMetrics
+            val longSide = maxOf(display.widthPixels, display.heightPixels).coerceAtMost(1920)
+            val shortSide = minOf(display.widthPixels, display.heightPixels).coerceAtMost(1080)
+            if (maxOf(f.width, f.height) < longSide && minOf(f.width, f.height) < shortSide)
+                effects.add(androidx.media3.effect.LanczosResample.scaleToFitWithFlexibleOrientation(longSide, shortSide))
+        }
+        player.setVideoEffects(effects)
+    }
+    private fun recoverSource(): Boolean {
+        if (recovering || recoveryAttempts >= 1 || metadata["offline"] == true) return false
+        val id = currentItem?.mediaId ?: return false
+        if (!MediaIdentity.valid(id)) return false
+        recoveryAttempts++; recovering = true
+        val epoch = ++recoveryEpoch
+        val position = player.currentPosition
+        val revision = userActionRevision
+        val playing = player.playWhenReady
+        lastError = null
+        metadataWorker.execute {
+            val result = runCatching { OnDeviceSource.shared(applicationContext).refreshForPlayback(id) }
+            handler.post {
+                if (destroyed || epoch != recoveryEpoch || currentItem?.mediaId != id) return@post
+                recovering = false
+                @Suppress("UNCHECKED_CAST")
+                val tracks = result.getOrNull()?.get("tracks") as? List<Map<String, Any?>>
+                if (tracks.isNullOrEmpty()) { lastError = "Nguồn hết hạn hoặc không còn truy cập được. Hãy thử lại."; return@post }
+                sources = tracks
+                val height = qualityMode.takeIf { h -> h == 0 || tracks.any { (it["height"] as? Number)?.toInt() == h } } ?: 0
+                runCatching { applyQuality(height, if (revision == userActionRevision) position else player.currentPosition,
+                    if (revision == userActionRevision && !timerExpired) playing else player.playWhenReady && !timerExpired) }
+                    .onFailure { lastError = "Không phục hồi được nguồn. Hãy thử lại." }
+            }
+        }
+        return true
+    }
     var qualityMode = 0; private set
     private var selectedHeight = 0
     private var lastQualityChange = 0L
@@ -118,6 +206,7 @@ class PlaybackService : MediaSessionService() {
     fun loadSources(tracks: List<Map<String, Any?>>, id: String, title: String?, author: String?, position: Long, details: Map<String, Any?> = emptyMap()) {
         require(tracks.isNotEmpty())
         saveProgress()
+        recoveryEpoch++; recoveryAttempts = 0; recovering = false; enhancementSuspended = false
         sources = tracks
         captionGeneration++; captionTracks = emptyList(); chapters = emptyList(); chaptersLoading = true; captions = emptyList(); captionSelected = -1; captionStatus = "loading"
         qualityMode = 0; selectedHeight = 0; qualityDecider.reset()
@@ -170,14 +259,14 @@ class PlaybackService : MediaSessionService() {
             val h = (it["height"] as? Number)?.toInt() ?: return@mapNotNull null
             AdaptiveQuality.Variant(h, (it["bitrate"] as? Number)?.toLong() ?: 0)
         }
-        val eligible = AdaptiveQuality.dataSaverVariants(variants, StartupCache.unmetered(this))
+        val eligible = AdaptiveQuality.dataSaverVariants(variants, StartupCache.wifi(this))
         if (eligible.isEmpty()) return
         if (selectedHeight > eligible.last().height) {
             applyQuality(eligible.last().height, player.currentPosition, player.playWhenReady)
             return
         }
-        val next = if (eligible.size == 1) eligible.first().height else AdaptiveQuality.candidate(eligible, bandwidthMeter.bitrateEstimate, audioBitrate.toLong(), player.playbackParameters.speed) ?: return
         val buffered = (player.bufferedPosition - player.currentPosition).coerceAtLeast(0)
+        val next = if (eligible.size == 1) eligible.first().height else AdaptiveQuality.candidate(eligible, bandwidthMeter.bitrateEstimate, audioBitrate.toLong(), player.playbackParameters.speed) ?: AdaptiveQuality.bufferCandidate(eligible, selectedHeight, buffered, player.playbackState != Player.STATE_READY) ?: return
         val target = qualityDecider.evaluate(selectedHeight, next, buffered, player.playbackState != Player.STATE_READY, now - lastQualityChange) ?: return
         applyQuality(target, player.currentPosition, player.playWhenReady)
     }
@@ -185,7 +274,7 @@ class PlaybackService : MediaSessionService() {
     private fun applyQuality(height: Int, position: Long, playing: Boolean) {
         val selected = if(height==0) {
             val variants = sources.map { AdaptiveQuality.Variant((it["height"] as Number).toInt(), (it["bitrate"] as? Number)?.toLong() ?: 0) }
-            val initial = AdaptiveQuality.dataSaverVariants(variants, StartupCache.unmetered(this)).last().height
+            val initial = AdaptiveQuality.dataSaverVariants(variants, StartupCache.wifi(this)).last().height
             sources.first { (it["height"] as Number).toInt() == initial }
         }
             else sources.firstOrNull{(it["height"] as Number).toInt()==height} ?: throw IllegalArgumentException("Chất lượng không được hỗ trợ")
@@ -196,6 +285,9 @@ class PlaybackService : MediaSessionService() {
             else if(mime=="application/x-mpegURL") DefaultHttpDataSource.Factory().setConnectTimeoutMs(15000).setReadTimeoutMs(20000).setDefaultRequestProperties(headers)
             else StartupCache.factory(this, headers)
         ).createMediaSource(currentItem!!.buildUpon().setUri(url).setMimeType(mime).setCustomCacheKey(key).build())
+        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+            .setMaxVideoSize(Int.MAX_VALUE, if (qualityMode == 0 && !StartupCache.wifi(this) && metadata["offline"] != true) 480 else Int.MAX_VALUE)
+            .build()
         val video=source(selected["url"] as String, selected["mime"] as String, selected["headers"] as? Map<String,String> ?: emptyMap(), selected["cacheKey"] as? String)
         audioBitrate = (selected["audioBitrate"] as? Number)?.toInt() ?: 0
         audioGain = (selected["audioGain"] as? Number)?.toFloat()?.coerceIn(.1f,1f) ?: 1f
@@ -209,6 +301,7 @@ class PlaybackService : MediaSessionService() {
         loadStarted = SystemClock.elapsedRealtime()
         firstFrameMs = -1
         player.setMediaSource(merged, position.coerceAtLeast(0))
+        updateEnhancement()
         player.prepare()
         player.playWhenReady=playing
     }
@@ -225,7 +318,7 @@ class PlaybackService : MediaSessionService() {
                 timerExpired = true
                 player.pause()
             }
-            if (++sampleTicks % 20 == 0) { saveProgress(); adaptQuality(now) }
+            if (++sampleTicks % 20 == 0) { saveProgress(); adaptQuality(now); updateEnhancement() }
             if (sampleTicks % 20 == 0 && (applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0) {
                 val stats = org.json.JSONObject().put("position",player.currentPosition).put("buffered",player.bufferedPosition).put("speed",player.playbackParameters.speed).put("playing",player.isPlaying).put("height",player.videoFormat?.height).put("audio",player.audioFormat?.sampleMimeType).put("timerMs",if(deadline>0)(deadline-SystemClock.elapsedRealtime()).coerceAtLeast(0) else 0).put("timerExpired",timerExpired).put("rendered",player.videoDecoderCounters?.renderedOutputBufferCount).put("dropped",player.videoDecoderCounters?.droppedBufferCount).put("rxBytes",android.net.TrafficStats.getUidRxBytes(applicationInfo.uid)).put("txBytes",android.net.TrafficStats.getUidTxBytes(applicationInfo.uid))
                 android.util.Log.i("YTBMetrics",stats.toString())
@@ -236,6 +329,10 @@ class PlaybackService : MediaSessionService() {
     override fun onCreate() {
         super.onCreate()
         current = this
+        enhancementMode = getSharedPreferences("video-settings", MODE_PRIVATE).getString("enhancement", "off") ?: "off"
+        lastWifi = StartupCache.wifi(this)
+        (getSystemService(android.content.Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager)
+            .registerDefaultNetworkCallback(networkCallback)
         val screenFilter = android.content.IntentFilter().apply { addAction(android.content.Intent.ACTION_SCREEN_OFF); addAction(android.content.Intent.ACTION_SCREEN_ON) }
         if (android.os.Build.VERSION.SDK_INT >= 33) registerReceiver(screenReceiver, screenFilter, android.content.Context.RECEIVER_NOT_EXPORTED) else registerReceiver(screenReceiver, screenFilter)
         bandwidthMeter = androidx.media3.exoplayer.upstream.DefaultBandwidthMeter.Builder(this).build()
@@ -249,7 +346,9 @@ class PlaybackService : MediaSessionService() {
             setWakeMode(C.WAKE_MODE_LOCAL)
             setSeekParameters(androidx.media3.exoplayer.SeekParameters(300000, 300000))
             trackSelectionParameters = trackSelectionParameters.buildUpon().setMaxVideoSize(Int.MAX_VALUE,Int.MAX_VALUE).build()
+            setVideoEffects(emptyList())
             addListener(object: Player.Listener {
+                override fun onVideoSizeChanged(size: VideoSize) { handler.post { if (!destroyed) updateEnhancement() } }
                 override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) { if(reason==Player.PLAY_WHEN_READY_CHANGE_REASON_USER_REQUEST)userActionRevision++ }
                 override fun onPlaybackStateChanged(playbackState: Int) {
                     if(playbackState == Player.STATE_ENDED && ::queue.isInitialized) {
@@ -263,6 +362,10 @@ class PlaybackService : MediaSessionService() {
                     android.util.Log.i("YTBStartup", "first-frame ${firstFrameMs}ms")
                 }
                 override fun onPlayerError(error: PlaybackException) {
+                    if (enhancementMode != "off" && !enhancementSuspended && error.errorCode in listOf(PlaybackException.ERROR_CODE_VIDEO_FRAME_PROCESSING_FAILED, PlaybackException.ERROR_CODE_VIDEO_FRAME_PROCESSOR_INIT_FAILED)) {
+                        enhancementSuspended = true; effectsKey = ""; updateEnhancement(); player.prepare(); return
+                    }
+                    if (recoverSource()) return
                     lastError = "Không phát được nguồn (${error.errorCodeName}). Hãy thử tải lại video."
                     val http = error.cause as? androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException
                     android.util.Log.e("YTBPlayer", "${error.errorCodeName} status=${http?.responseCode}")
@@ -270,6 +373,11 @@ class PlaybackService : MediaSessionService() {
             })
         }
         player.addAnalyticsListener(object: androidx.media3.exoplayer.analytics.AnalyticsListener {
+            override fun onDroppedVideoFrames(eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime, droppedFrames: Int, elapsedMs: Long) {
+                if (enhancementMode != "off" && droppedFrames >= 12) {
+                    enhancementSuspended = true; handler.post { if (!destroyed) updateEnhancement() }
+                }
+            }
             override fun onAudioUnderrun(eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime, bufferSize: Int, bufferSizeMs: Long, elapsedSinceLastFeedMs: Long) { audioUnderruns++ }
         })
         queue = PlaybackQueue(this)
@@ -311,8 +419,11 @@ class PlaybackService : MediaSessionService() {
     }
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = session
     override fun onDestroy() {
+        destroyed = true; recoveryEpoch++
         saveProgress()
         unregisterReceiver(screenReceiver)
+        (getSystemService(android.content.Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager)
+            .unregisterNetworkCallback(networkCallback)
         metadataGeneration++
         metadataWorker.shutdownNow()
         if (::musicQueue.isInitialized) musicQueue.release()
