@@ -1,8 +1,20 @@
-# Diu Túp — Android độc lập 0.8.5
+# Diu Túp — Android độc lập 0.9.0
 
 Ứng dụng Flutter + Android Media3 tự tìm và phát video YouTube ngay trên điện thoại. **Chỉ cần Internet (Wi-Fi/4G/5G); không cần Mac, USB, máy chủ riêng, Termux hay ứng dụng phụ.** Python, yt-dlp, EJS và QuickJS cần cho bộ lấy nguồn đã nằm trong APK.
 
-APK: [gen/Diu-Tup-dung-thu/Diu-Tup-0.8.5.apk](gen/Diu-Tup-dung-thu/Diu-Tup-0.8.5.apk). Cài APK rồi mở **Diu Túp**. Không có đăng nhập hoặc tài khoản. APK chứa ARM32, ARM64 và x86-64; thiết bị đã kiểm tra thực tế là Samsung Galaxy S10+ ARM64/Android 12. Logo D2K: Đức Hai Ka, sinh năm 2000, trong `gen/logo/`.
+APK: [GitHub Releases](https://github.com/dovanduc0908/ytb/releases/latest). Cài APK rồi mở **Diu Túp**. Không có đăng nhập hoặc tài khoản. APK chứa ARM32, ARM64 và x86-64; thiết bị đã kiểm tra thực tế là Samsung Galaxy S10+ ARM64/Android 12. Logo D2K: Đức Hai Ka, sinh năm 2000, trong `docs/Duchaik-D2K.png`.
+
+## Mới trong 0.9.0
+
+- Facebook: giữ nguồn video độ phân giải cao và ghép âm thanh riêng; chọn codec/kích thước/tốc độ khung hình máy hỗ trợ. Không gắn nhãn 360p cho nguồn thiếu metadata.
+- Auto trên Wi-Fi bắt đầu ở nguồn tương thích cao nhất; trên SIM ưu tiên mức cao nhất không vượt 480p, dùng mức thấp nhất nếu nguồn không có mức dưới 480p. Chuyển mạng áp dụng lại Auto, giữ thời gian xem và trạng thái phát.
+- Toàn màn hình ưu tiên hướng người dùng chọn. Có nút ngang/dọc và tùy chọn Theo video; metadata đến muộn không ghi đè lựa chọn. Đồng bộ khóa hướng và bàn giao bề mặt video khi chuyển màn hình/PiP.
+- Tăng cường hình ảnh: Tắt/Tự động/Mạnh, phóng hình Lanczos và tăng nét GPU có giới hạn; ngắt khi quá nhiệt, rơi khung hình hoặc lỗi xử lý. Không phải AI tái tạo chi tiết, không đổi nhãn độ phân giải nguồn.
+- Phục hồi URL nguồn lỗi tối đa một lần trong phiên mở video; bảo toàn thao tác pause/tua và bỏ kết quả của video cũ.
+- Đồng nhất link Facebook trong lịch sử, hàng đợi và tải ngoại tuyến; tên tệp tải dùng hash an toàn. Tốc độ thống nhất 0,25–4×; sửa tràn thẻ video khi xoay.
+- Mã nguồn không còn theo dõi APK, node_modules và bản chụp QA sinh tự động. Lịch sử Git giữ các bản cũ; APK mới nằm trong Releases.
+
+Chi tiết kiểm thử và giới hạn: [QA 0.9.0](docs/VIDEO_QUALITY_0.9_QA.md).
 
 ## Mới trong 0.8.5
 
@@ -61,8 +73,8 @@ Header chỉ logo, micro tìm kiếm tiếng Việt, video liên quan tải theo
 - Gợi ý YouTube khi gõ (chờ 120 ms sau phím cuối), chọn/điền gợi ý, lịch sử 20 từ khóa có nút xóa.
 - Lưu tạm kết quả/gợi ý 1 phút; tìm kiếm và gợi ý có luồng riêng, không bị bộ lấy nguồn chặn.
 - Mở liên kết/ID YouTube.
-- Trình phát native có âm thanh; 14 mức tốc độ 0,25–3,5×, bước 0,25×.
-- Chọn chất lượng theo nguồn và decoder thực tế, tối đa 2160p. Auto khởi đầu ở mức cao nhất không vượt 720p để giảm chờ. Đường nhanh trả cả 2K/4K khi nguồn cung cấp và thiết bị giải mã được; tự điều chỉnh dựa trên băng thông và dữ liệu đệm.
+- Trình phát native có âm thanh; 16 mức tốc độ 0,25–4×, bước 0,25×.
+- Chọn chất lượng theo nguồn và decoder thực tế, tối đa 2160p. Auto khởi đầu cao nhất trên Wi-Fi, ưu tiên tối đa 480p trên SIM. Đường nhanh trả cả 2K/4K khi nguồn cung cấp và thiết bị giải mã được; tự điều chỉnh dựa trên băng thông và dữ liệu đệm.
 - Tua ±10 giây/slider; chỉ gửi lệnh tua khi thả thanh kéo, tránh tải liên tục trong lúc kéo. Ưu tiên keyframe trong phạm vi ±0,3 giây nếu có. Bố cục dọc/ngang, PiP theo yêu cầu, hẹn giờ ngủ theo phút.
 - Lịch sử, tiếp tục vị trí cũ và xem sau lưu trên điện thoại; tốc độ reset về 1× mỗi lần mở lại ứng dụng.
 - Không tích hợp SDK quảng cáo hoặc chèn quảng cáo vào player.
