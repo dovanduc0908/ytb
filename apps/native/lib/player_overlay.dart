@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
@@ -70,6 +71,27 @@ class _PlayerOverlayState extends State<PlayerOverlay> {
   double meterValue = 0;
   double? heldSpeed;
   int meterGeneration = 0;
+  final Set<int> activePointers = {};
+  bool systemEdgeGesture = false;
+
+  Widget trackGestureStart(BuildContext context, Widget child) => Listener(
+    onPointerDown: (event) {
+      if (activePointers.isEmpty) {
+        final media = MediaQuery.of(context);
+        // Capture the original touch before ScaleGestureRecognizer crosses its
+        // slop threshold. Keep this decision until every finger is released.
+        final topEdge = math.max(
+          48.0,
+          math.max(media.viewPadding.top, media.systemGestureInsets.top),
+        );
+        systemEdgeGesture = fullscreen && event.position.dy < topEdge;
+      }
+      activePointers.add(event.pointer);
+    },
+    onPointerUp: (event) => activePointers.remove(event.pointer),
+    onPointerCancel: (event) => activePointers.remove(event.pointer),
+    child: child,
+  );
   void showMeter(String kind, double value) {
     meterTimer?.cancel();
     setState(() {
@@ -118,7 +140,10 @@ class _PlayerOverlayState extends State<PlayerOverlay> {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) =>
+      trackGestureStart(context, buildOverlay(context));
+
+  Widget buildOverlay(BuildContext context) {
     final duration = (state['duration'] as num? ?? 0).toDouble();
     final position = (state['position'] as num? ?? 0).toDouble().clamp(
       0,
@@ -151,6 +176,7 @@ class _PlayerOverlayState extends State<PlayerOverlay> {
         onScaleUpdate: locked
             ? null
             : (event) {
+                if (systemEdgeGesture) return;
                 if (event.pointerCount > 1 || pinching) {
                   if (!fullscreen) return;
                   pinching = true;
@@ -243,6 +269,7 @@ class _PlayerOverlayState extends State<PlayerOverlay> {
         onScaleEnd: locked
             ? null
             : (event) {
+                if (systemEdgeGesture) return;
                 if (seekTarget != null) {
                   onSeek(seekTarget!);
                   setState(() => seekTarget = null);
