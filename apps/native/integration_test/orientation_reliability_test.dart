@@ -104,8 +104,9 @@ void main() {
         });
         File('/data/user/0/com.duchaik.ytb/cache/orientation-reliability.json')
             .writeAsStringSync(jsonEncode({'cycles': results}));
-        if ((i + 1) % 10 == 0)
+        if ((i + 1) % 10 == 0) {
           debugPrint('ORIENTATION_QA: ${i + 1}/100 passed');
+        }
       }
       await load(false);
       await waitFor((s) => s['playing'] == true);

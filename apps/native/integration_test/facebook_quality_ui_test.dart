@@ -110,10 +110,11 @@ void main() {
         await tester.pump(const Duration(seconds: 10));
         final s = await state();
         expect(s['error'], isNull);
-        if (i % 6 == 5)
+        if (i % 6 == 5) {
           debugPrint(
             'FACEBOOK_ENHANCEMENT_QA: ${(i + 1) * 10}s, ${s['enhancementStatus']}, frames=${s['renderedFrames']}, dropped=${s['droppedFrames']}',
           );
+        }
       }
       report['performanceEnd'] = await state();
       save();
