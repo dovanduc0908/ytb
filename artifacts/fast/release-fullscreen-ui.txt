@@ -1,9 +1,0 @@
-{"text": "", "content-desc": "Hiện điều khiển video", "class": "android.widget.Button", "clickable": "true", "bounds": "[107,0][2047,1080]"}
-{"text": "", "content-desc": "Thoát toàn màn hình", "class": "android.widget.Button", "clickable": "true", "bounds": "[128,32][254,158]"}
-{"text": "", "content-desc": "Tùy chọn phát", "class": "android.widget.Button", "clickable": "true", "bounds": "[0,0][0,0]"}
-{"text": "", "content-desc": "Phát video", "class": "android.widget.Button", "clickable": "true", "bounds": "[1110,456][1278,624]"}
-{"text": "", "content-desc": "Lùi 10 giây", "class": "android.widget.Button", "clickable": "true", "bounds": "[921,477][1047,603]"}
-{"text": "", "content-desc": "Tới 10 giây", "class": "android.widget.Button", "clickable": "true", "bounds": "[1341,477][1467,603]"}
-{"text": "", "content-desc": "0:25 / 7:44", "class": "android.view.View", "clickable": "false", "bounds": "[149,916][306,961]"}
-{"text": "", "content-desc": "6%", "class": "android.widget.SeekBar", "clickable": "true", "bounds": "[202,962][328,1080]"}
-{"text": "", "content-desc": "Thu nhỏ", "class": "android.widget.Button", "clickable": "true", "bounds": "[0,0][0,0]"}

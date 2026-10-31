@@ -1,6 +1,0 @@
---------- beginning of main
-10-26 13:56:10.924 19275 19350 I YTBSource: search OK 4494ms on-device
-10-26 13:56:25.218 19275 19465 I YTBSource: resolve OK 15998ms on-device
-10-26 13:58:38.478 19275 19350 I YTBSource: search OK 4188ms on-device
-10-26 13:58:52.324 19275 19465 I YTBSource: search OK 4098ms on-device
-10-26 13:59:12.707 19275 19350 I YTBSource: resolve OK 16696ms on-device

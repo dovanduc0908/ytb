@@ -1,7 +1,0 @@
-2 activities found:
-  Activity #0:
-    priority=0 preferredOrder=0 match=0x108000 specificIndex=-1 isDefault=true
-    com.google.android.tts/com.google.android.apps.speech.tts.googletts.service.GoogleTTSActivity
-  Activity #1:
-    priority=-1 preferredOrder=0 match=0x108000 specificIndex=-1 isDefault=true
-    com.google.android.googlequicksearchbox/com.google.android.voicesearch.intentapi.IntentApiActivity

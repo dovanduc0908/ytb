@@ -1,5 +1,0 @@
---------- beginning of main
-10-26 14:18:21.941 30042 30180 I YTBSource: search OK 914ms on-device cache=false
-10-26 14:18:41.575 30042 30403 I YTBSource: suggest OK 313ms on-device cache=false
-10-26 14:19:30.625 30042 30576 I YTBSource: search OK 1142ms on-device cache=false
-10-26 14:21:37.062 30042 30916 I YTBSource: resolve OK 18239ms on-device cache=false

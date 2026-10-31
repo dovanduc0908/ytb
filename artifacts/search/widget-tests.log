@@ -1,9 +1,0 @@
-00:00 +0: loading /Users/duchaik/Documents/YTB/apps/native/test/search_box_test.dart
-00:00 +0: /Users/duchaik/Documents/YTB/apps/native/test/widget_test.dart: YouTube link parsing accepts known hosts, rejects lookalikes
-00:00 +1: /Users/duchaik/Documents/YTB/apps/native/test/widget_test.dart: Speed selector covers the complete requested range
-00:00 +2: /Users/duchaik/Documents/YTB/apps/native/test/widget_test.dart: Timer display handles hour boundary and clamps negatives
-00:00 +3: /Users/duchaik/Documents/YTB/apps/native/test/search_box_test.dart: rapid typing makes one request; obsolete reply cannot replace current suggestions
-00:00 +4: /Users/duchaik/Documents/YTB/apps/native/test/search_box_test.dart: clear invalidates in-flight response and keeps input usable offline
-00:00 +5: /Users/duchaik/Documents/YTB/apps/native/test/search_box_test.dart: submit before debounce cancels suggestions and remembers query
-00:01 +6: /Users/duchaik/Documents/YTB/apps/native/test/search_box_test.dart: Vietnamese suggestions do not disturb ongoing IME composition
-00:01 +7: All tests passed!
