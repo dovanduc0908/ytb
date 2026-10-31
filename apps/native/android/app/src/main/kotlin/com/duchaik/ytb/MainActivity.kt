@@ -309,7 +309,13 @@ class MainActivity: FlutterActivity() {
                     "sources" -> {
                         @Suppress("UNCHECKED_CAST")
                         val tracks = call.argument<List<Map<String, Any?>>>("tracks") ?: emptyList()
-                        if (call.argument<String>("id") == p.currentMediaItem?.mediaId && tracks.isNotEmpty()) service.sources = tracks
+                        if (call.argument<String>("id") == p.currentMediaItem?.mediaId && tracks.isNotEmpty()) {
+                            require(tracks.all { track ->
+                                (track["url"] as? String)?.let(MediaIdentity::mediaUrl) == true &&
+                                (track["audioUrl"] == null || (track["audioUrl"] as? String)?.let(MediaIdentity::mediaUrl) == true)
+                            }) { "Nguồn phát không được hỗ trợ" }
+                            service.sources = tracks
+                        }
                         result.success(null)
                     }
                     "caption" -> { service.chooseCaption(call.argument<Number>("id")?.toInt() ?: -1); result.success(null) }

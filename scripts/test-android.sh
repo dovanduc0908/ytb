@@ -3,16 +3,22 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 source scripts/env.sh
 serial="${1:?Usage: scripts/test-android.sh SERIAL}"
+mkdir -p artifacts/qa
+# Always restore the normal app, including when an integration assertion fails.
+restore_app() {
+  local result=$?
+  trap - EXIT
+  cd "${YTB_PROJECT_ROOT}"
+  if bash scripts/build-android.sh && bash scripts/install-android.sh "$serial"; then
+    exit "$result"
+  else
+    print -u2 'Could not restore the normal APK after device tests.'
+    exit 1
+  fi
+}
+YTB_PROJECT_ROOT="$PWD"
+trap restore_app EXIT
 cd apps/native
-flutter test integration_test/player_test.dart -d "$serial" --no-uninstall --reporter expanded | tee ../../artifacts/qa/integration.log
-cd ../..
-python3 - <<'PYREPORT'
-import json
-from pathlib import Path
-lines=Path('artifacts/qa/integration.log').read_text().splitlines()
-line=next(x for x in lines if 'YTB_QA_JSON:' in x)
-data=json.loads(line.split('YTB_QA_JSON:',1)[1])
-Path('artifacts/qa/player-qa.json').write_text(json.dumps(data,indent=2))
-PYREPORT
-./scripts/build-android.sh
-./scripts/install-android.sh "$serial"
+for target in public_youtube_policy facebook_quality_ui; do
+  flutter test "integration_test/${target}_test.dart" -d "$serial" --no-uninstall --reporter expanded | tee "../../artifacts/qa/${target}.log"
+done
