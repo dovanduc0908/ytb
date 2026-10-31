@@ -44,7 +44,9 @@ void main() {
           reason: 'Run scripts/test-orientation.sh first',
         );
         await player.invokeMethod('load', {
-          'id': portrait ? 'qaPortrait1' : 'qaLandscap1',
+          'id': portrait
+              ? 'https://www.facebook.com/watch/?v=10001'
+              : 'https://www.facebook.com/watch/?v=10002',
           'title': 'QA generated pattern',
           'position': 0,
           'metadata': {'offline': true},
