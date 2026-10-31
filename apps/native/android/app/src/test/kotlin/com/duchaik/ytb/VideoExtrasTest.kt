@@ -25,8 +25,8 @@ class VideoExtrasTest {
     }
     @Test fun dataSaverLimitsAutomaticQualityAndUsesLowestAvailableFallback() {
         val variants = listOf(AdaptiveQuality.Variant(720, 1500000), AdaptiveQuality.Variant(360, 500000), AdaptiveQuality.Variant(480, 800000))
-        assertEquals(listOf(360), AdaptiveQuality.dataSaverVariants(variants, false).map { it.height })
-        assertEquals(listOf(360, 480), AdaptiveQuality.dataSaverVariants(variants, true).map { it.height })
+        assertEquals(listOf(360, 480), AdaptiveQuality.dataSaverVariants(variants, false).map { it.height })
+        assertEquals(listOf(360, 480, 720), AdaptiveQuality.dataSaverVariants(variants, true).map { it.height })
         assertEquals(listOf(720), AdaptiveQuality.dataSaverVariants(listOf(variants.first()), false).map { it.height })
         assertTrue(AdaptiveQuality.dataSaverVariants(emptyList(), false).isEmpty())
     }
