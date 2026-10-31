@@ -26,7 +26,7 @@ Future<Map<String, dynamic>> until(
 void main() {
   final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   testWidgets(
-    'Real Samsung playback: 17 speeds, supported qualities, sleep timer',
+    'Real Samsung playback: 16 speeds, supported qualities, sleep timer',
     (tester) async {
       await tester.pumpWidget(
         const MaterialApp(
@@ -68,8 +68,8 @@ void main() {
         await until((s) => s['playing'] == true);
         await channel.invokeMethod('quality', {'height': 480});
         await until((s) => s['playing'] == true && s['height'] == 480);
-        for (var i = 0; i < 17; i++) {
-          final rate = 1 + i * .25;
+        for (var i = 0; i < 16; i++) {
+          final rate = .25 + i * .25;
           await channel.invokeMethod('pause');
           await channel.invokeMethod('speed', {'value': rate});
           // Direct CDN throughput can vary. Measure rate only with enough media buffered.
