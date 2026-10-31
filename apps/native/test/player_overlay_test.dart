@@ -4,6 +4,91 @@ import 'package:ytb/player_overlay.dart';
 import 'package:ytb/main.dart' show clock;
 
 void main() {
+  for (final size in [const Size(900, 500), const Size(500, 900)]) {
+    for (final inset in [0.0, 80.0]) {
+      testWidgets('system top swipe leaves playback unchanged: $size / $inset', (
+        tester,
+      ) async {
+        tester.view.physicalSize = size;
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+        final adjustments = <String>[];
+        final seeks = <int>[];
+        final speeds = <double>[];
+        await tester.pumpWidget(
+          MaterialApp(
+            home: MediaQuery(
+              data: MediaQueryData(
+                size: size,
+                viewPadding: EdgeInsets.only(top: inset),
+                systemGestureInsets: EdgeInsets.only(top: inset),
+              ),
+              child: Material(
+                child: PlayerOverlay(
+                  video: const ColoredBox(color: Colors.black),
+                  visible: false,
+                  fullscreen: true,
+                  loading: false,
+                  state: const {
+                    'playing': true,
+                    'position': 30000,
+                    'duration': 180000,
+                    'speed': 1.0,
+                  },
+                  onToggle: () {},
+                  onPlay: () {},
+                  onSeek: seeks.add,
+                  onFullscreen: () {},
+                  onSettings: () {},
+                  formatTime: clock,
+                  onSpeed: speeds.add,
+                  onAdjust: (kind, delta) async {
+                    adjustments.add(kind);
+                    return .5;
+                  },
+                ),
+              ),
+            ),
+          ),
+        );
+        for (final x in [size.width * .2, size.width * .8]) {
+          for (final y in [2.0, 40.0, if (inset > 48) 70.0]) {
+            final gesture = await tester.startGesture(Offset(x, y));
+            // A fast first move can put the recognizer's start point well
+            // outside the protected strip: classify using pointer-down.
+            await gesture.moveBy(const Offset(0, 160));
+            await gesture.moveBy(const Offset(0, 100));
+            await gesture.up();
+            await tester.pump();
+          }
+        }
+        final cancelled = await tester.startGesture(const Offset(100, 2));
+        await cancelled.moveBy(const Offset(80, 160));
+        await cancelled.cancel();
+        await tester.pump();
+        expect(adjustments, isEmpty);
+        expect(seeks, isEmpty);
+        expect(speeds, isEmpty);
+        expect(find.byKey(const Key('adjustment-volume')), findsNothing);
+        expect(find.byKey(const Key('adjustment-brightness')), findsNothing);
+        // A fresh gesture in the video still works after release/cancellation.
+        await tester.dragFrom(
+          Offset(size.width * .2, size.height * .5),
+          const Offset(0, -100),
+        );
+        await tester.pump();
+        await tester.dragFrom(
+          Offset(size.width * .8, size.height * .5),
+          const Offset(0, -100),
+        );
+        await tester.pump();
+        expect(adjustments, containsAll(['brightness', 'volume']));
+        await tester.pump(const Duration(seconds: 2));
+        await tester.pumpWidget(const SizedBox());
+      });
+    }
+  }
   testWidgets('center controls select the previous and next video', (
     tester,
   ) async {
