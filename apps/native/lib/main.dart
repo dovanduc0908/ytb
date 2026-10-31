@@ -2472,6 +2472,65 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
   bool checkingUpdate = false;
   Map<String, dynamic>? updateCandidate;
 
+  Future<void> chooseVersion() async {
+    final url = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+          children: [
+            const Text(
+              'Chọn phiên bản',
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'Android không cho cài đè phiên bản cũ lên phiên bản mới. Để quay về bản cũ, bạn cần gỡ ứng dụng hiện tại trước; dữ liệu lưu trong app có thể bị xóa. Hãy sao lưu dữ liệu cần giữ trước khi gỡ.',
+            ),
+            const SizedBox(height: 12),
+            for (final version in const [
+              ('0.9.0 (17)', 'build-17'),
+              ('0.9.1 (18)', 'build-18'),
+              ('0.10.0 (19) · Thử nghiệm', 'build-19'),
+            ])
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text(version.$1),
+                subtitle: const Text('Mở trang phát hành để tải Diu-Tup.apk'),
+                trailing: const Icon(Icons.open_in_new),
+                onTap: () => Navigator.pop(
+                  context,
+                  'https://github.com/dovanduc0908/ytb/releases/tag/${version.$2}',
+                ),
+              ),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Các phiên bản khác'),
+              trailing: const Icon(Icons.open_in_new),
+              onTap: () => Navigator.pop(
+                context,
+                'https://github.com/dovanduc0908/ytb/releases',
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (url == null || !mounted) return;
+    try {
+      if (!await launchUrl(
+        Uri.parse(url),
+        mode: LaunchMode.externalApplication,
+      )) {
+        throw StateError('launch');
+      }
+    } catch (_) {
+      if (mounted) toast('Không mở được trang phiên bản. Hãy thử lại.');
+    }
+  }
+
   Future<void> updateApp() async {
     const updater = MethodChannel('ytb/update');
     if (checkingUpdate) return;
@@ -2549,6 +2608,13 @@ class _HomeState extends State<Home> with WidgetsBindingObserver {
               : 'Android sẽ hỏi xác nhận cài đặt',
         ),
         onTap: checkingUpdate ? null : updateApp,
+      ),
+      ListTile(
+        contentPadding: EdgeInsets.zero,
+        leading: const Icon(Icons.history),
+        title: const Text('Chọn phiên bản'),
+        subtitle: const Text('Tải 0.9.0 hoặc phiên bản khác từ GitHub'),
+        onTap: chooseVersion,
       ),
       ListTile(
         contentPadding: EdgeInsets.zero,
